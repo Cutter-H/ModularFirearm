@@ -10,40 +10,43 @@
 /**
  * Classes for each type of Gun Component Data Asset
  */
+#pragma region Firearm Data
 UCLASS()
 class MODULARFIREARM_API UModularFirearmData : public UDataAsset
 {
 	GENERATED_BODY()
 public:
 	UPROPERTY(EditAnywhere, Category = "Info")
-		FString name = "Firearm";
+	FString FirearmName = "Firearm";
 	UPROPERTY(EditAnywhere, Category = "Info")
-		FString description = "A gun.";
+	FString FirearmDescription = "A gun.";
 	UPROPERTY(EditAnywhere, Category = "Info")
-		UMaterialInstance* Icon;
+	UMaterialInstance* Icon;
+	UPROPERTY()
+	FString DefaultSkin;
+	UPROPERTY(EditAnywhere, Category = "Stats")
+	float GunDamage = 1.f;
+	UPROPERTY(EditAnywhere, Category = "Stats")
+	float RoundsPerSecond = 5.f;
+	UPROPERTY(EditAnywhere, Category = "Stats")
+	bool bAutomatic = true;
+	UPROPERTY(EditAnywhere, Category = "Stats")
+	TSubclassOf<AActor> BulletClass;
 
-	UPROPERTY(EditAnywhere, Category = "Stats")
-		float GunDamage = 1.f;
-	UPROPERTY(EditAnywhere, Category = "Stats")
-		float RoundsPerSecond = 5.f;
-	UPROPERTY(EditAnywhere, Category = "Stats")
-		bool bAutomatic = true;
-	UPROPERTY(EditAnywhere, Category = "Stats")
-		TSubclassOf<AActor> BulletClass;
-
 	UPROPERTY(EditAnywhere, Category = "Components")
-		UGunMagazineData* Magazine;
+	TObjectPtr<UGunMagazineData> Magazine;
 	UPROPERTY(EditAnywhere, Category = "Components")
-		UGunBarrelData* Barrel;
+	TObjectPtr<UGunBarrelData> Barrel;
 	UPROPERTY(EditAnywhere, Category = "Components")
-		UGunStockData* Stock;
+	TObjectPtr<UGunStockData> Stock;
 	UPROPERTY(EditAnywhere, Category = "Components")
-		UGunSightData* Sight;
+	TObjectPtr<UGunSightData> Sight;
 	UPROPERTY(EditAnywhere, Category = "Components")
-		UGunGripData* Grip;
+	TObjectPtr<UGunGripData> Grip;
 	UPROPERTY(EditAnywhere, Category = "Components")
-		UGunAttachmentData* Attachment;
+	TObjectPtr<UGunAttachmentData> Attachment;
 };
+#pragma endregion
 
 #pragma region Component Base
 UCLASS(NotBlueprintable, HideDropdown)
@@ -52,19 +55,20 @@ class MODULARFIREARM_API UGunPartDataBase : public UDataAsset
 	GENERATED_BODY()
 public:
 	UPROPERTY(EditAnywhere)
-		FString name = "Gun Component";
+	FName PartName = "Gun Component";
 	UPROPERTY(EditAnywhere)
-		FString description ="Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
+	FText FirearmDescription = FText::FromString("Lorem ipsum");
 	UPROPERTY(EditAnywhere)
-		UStaticMesh* StaticMesh;
+	TObjectPtr<USkeletalMesh> Mesh;
 	UPROPERTY(EditAnywhere)
-		TArray<UMaterialInterface*> AlternativeSkins;
+	TSubclassOf<UAnimInstance> DefaultAnimInstance;
 	UPROPERTY(EditAnywhere)
-		UMaterialInterface* Icon;
+	TMap<FString, UMaterialInterface*> AlternativeSkins;
+	UPROPERTY(EditAnywhere)
+	TObjectPtr<UMaterialInterface> Icon;
 };
 
 #pragma endregion
-
 #pragma region Attachment
 UCLASS(meta = (PrioritizeCategories = "GunDataAssetBase"))
 class MODULARFIREARM_API UGunAttachmentData : public UGunPartDataBase
@@ -78,7 +82,6 @@ public:
 		class UNiagaraSystem* NiagaraBeamSystem;
 };
 #pragma endregion
-
 #pragma region Barrel
 UCLASS(meta = (PrioritizeCategories = "GunDataAssetBase"))
 class MODULARFIREARM_API UGunBarrelData : public UGunPartDataBase
@@ -113,7 +116,6 @@ public:
 
 };
 #pragma endregion
-
 #pragma region Grip
 UCLASS(meta = (PrioritizeCategories = "GunDataAssetBase"))
 class MODULARFIREARM_API UGunGripData : public UGunPartDataBase
@@ -124,7 +126,6 @@ public:
 
 };
 #pragma endregion
-
 #pragma region Magazine
 UCLASS(meta = (PrioritizeCategories = "GunDataAssetBase"))
 class MODULARFIREARM_API UGunMagazineData : public UGunPartDataBase
@@ -137,7 +138,6 @@ public:
 		float ReloadSpeedMultiplier = 1.f;
 };
 #pragma endregion
-
 #pragma region Sight
 UCLASS(meta = (PrioritizeCategories = "GunDataAssetBase"))
 class MODULARFIREARM_API UGunSightData : public UGunPartDataBase
@@ -149,10 +149,9 @@ public:
 	UPROPERTY(EditAnywhere)
 		float FOVZoomAmount = 0.f;
 	UPROPERTY(EditAnywhere)
-		FVector CameraAimOffset = FVector(0, 0, 0);
+	FVector CameraAimOffset = FVector(0, 0, 0);
 };
 #pragma endregion
-
 #pragma region Stock
 UCLASS(meta = (PrioritizeCategories = "GunDataAssetBase"))
 class MODULARFIREARM_API UGunStockData : public UGunPartDataBase
