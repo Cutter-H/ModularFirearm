@@ -78,38 +78,16 @@ public:
 #pragma endregion
 protected:
 #pragma region Firearm Variables
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Info", meta = (DisplayPriority = 1))
-	FString FirearmName = "Firearm";
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Info", meta = (DisplayPriority = 1))
-	FString FirearmDescription = "A gun.";
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Info", meta = (DisplayPriority = 1))
-	TObjectPtr<UMaterialInstance> Icon;
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Info", meta = (DisplayPriority = 1))
-	FString DefaultSkin;
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Info", meta = (DisplayPriority = 1))
-	TMap<FString, UMaterialInterface*> Skins;
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Info", meta = (DisplayPriority = 1, ExposeOnSpawn = "true"))
-	TObjectPtr<UModularFirearmData> DefaultParts;
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Info", meta = (DisplayPriority = 1, ExposeOnSpawn = "true"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm", meta = (ExposeOnSpawn = "true"))
+	TObjectPtr<UModularFirearmData> FirearmData;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm", meta = (ExposeOnSpawn = "true"))
 	bool bStartWithWeaponLoaded = true;
-	UPROPERTY(EditAnywhere, Category = "Stats", meta = (DisplayPriority = 2))
-	FScalableFirearmFloat GunDamageMultiplier;
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Info", meta = (DisplayPriority = 1))
-	FScalableFirearmFloat MultiShot;
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Info", meta = (DisplayPriority = 1), AdvancedDisplay)
-	bool bPlayMontagesFromExternalSource = false;
-	UPROPERTY(EditAnywhere, Category = "Stats", meta = (DisplayPriority = 2))
-	TEnumAsByte<EFiringType> FiringType;
-	UPROPERTY(EditAnywhere, Category = "Stats", meta = (DisplayPriority = 2))
+	UPROPERTY(EditAnywhere, Category = "Firearm")
+	TEnumAsByte<EFiringMode> FiringMode;
+	UPROPERTY(EditAnywhere, Category = "Firearm")
 	TEnumAsByte<ETargetingMode> TargetingMode;
-	UPROPERTY(EditAnywhere, Category = "Stats", meta = (DisplayPriority = 2))
-	TEnumAsByte<ECollisionChannel> TargetingChannel = ECollisionChannel::ECC_Visibility;
-	UPROPERTY(EditAnywhere, Category = "Stats", meta = (DisplayPriority = 2))
-	bool bContinuousFire = true;
-	UPROPERTY(EditAnywhere, Category = "Stats", meta = (DisplayPriority = 2))
-	FScalableFirearmFloat RoundsPerSecond = FScalableFirearmFloat(5.f);
-	UPROPERTY(EditAnywhere, Category = "Stats", meta = (DisplayPriority = 2), AdvancedDisplay)
-	bool bRecycleAmmoOnReload = true;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm", AdvancedDisplay)
+	bool bPlayMontagesFromExternalSource = false;
 
 	UPROPERTY(Replicated, meta = (ArraySizeEnum = "EFirearmComponentType"))
 	TArray<FString> ComponentSkins;
@@ -117,44 +95,30 @@ protected:
 	int FirearmLevel = 1;
 #pragma endregion
 #pragma region Component Defaults
-	UPROPERTY(EditAnywhere, Category = "Stats|ComponentFallbacks|Barrel")
+	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel")
 	FScalableFirearmFloat DefaultBulletSpread = FScalableFirearmFloat(0);
-	UPROPERTY(EditAnywhere, Category = "Stats|ComponentFallbacks|Barrel")
+	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel")
 	FScalableFirearmFloat DefaultNoise = FScalableFirearmFloat(0);
-	UPROPERTY(EditAnywhere, Category = "Stats|ComponentFallbacks|Grip")
+	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Grip")
 	TObjectPtr<UForceFeedbackEffect> DefaultFiringHaptic;
-	UPROPERTY(EditAnywhere, Category = "Stats|ComponentFallbacks|Magazine")
+	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Magazine")
 	FScalableFirearmFloat DefaultMaxAmmo = FScalableFirearmFloat(30);
-	UPROPERTY(EditAnywhere, Category = "Stats|ComponentFallbacks|Stock")
+	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Magazine")
+	TSubclassOf<AActor> DefaultBulletClass;
+	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Stock")
 	TSubclassOf<UCameraShakeBase> DefaultCamShake;
 	
 #pragma endregion
 #pragma region Cosmetics
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cosmetics")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Cosmetics")
 	TObjectPtr<UAnimMontage> FiringMontage;
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cosmetics")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Cosmetics")
 	TObjectPtr<UAnimMontage> ReloadMontage;
 
 	UFUNCTION(NetMulticast, Reliable)
 	void PlayReplicatedMontage(UAnimMontage* montage, const FString& info = "");
 	UFUNCTION()
 	void OnReceiverMontageEnded(UAnimMontage* Montage, bool bInterrupted);
-#pragma endregion
-#pragma region Attachment Names
-	UPROPERTY(EditAnywhere, Category = "Info|AttachmentNames")
-	FName MuzzleSocketName = "Muzzle";
-	UPROPERTY(EditDefaultsOnly, AdvancedDisplay, Category = "Info|AttachmentNames", meta = (DisplayPriority = 1))
-	FName AttachmentBoneName = "Attachment";
-	UPROPERTY(EditDefaultsOnly, AdvancedDisplay, Category = "Info|AttachmentNames", meta = (DisplayPriority = 1))
-	FName BarrelBoneName = "Barrel";
-	UPROPERTY(EditDefaultsOnly, AdvancedDisplay, Category = "Info|AttachmentNames", meta = (DisplayPriority = 1))
-	FName GripBoneName = "Grip";
-	UPROPERTY(EditDefaultsOnly, AdvancedDisplay, Category = "Info|AttachmentNames", meta = (DisplayPriority = 1))
-	FName MagazineBoneName = "Magazine";
-	UPROPERTY(EditDefaultsOnly, AdvancedDisplay, Category = "Info|AttachmentNames", meta = (DisplayPriority = 1))
-	FName SightBoneName = "Sight";
-	UPROPERTY(EditDefaultsOnly, AdvancedDisplay, Category = "Info|AttachmentNames", meta = (DisplayPriority = 1))
-	FName StockBoneName = "Stock";
 #pragma endregion
 	AModularFirearm();
 	virtual void OnConstruction(const FTransform& Transform) override;
@@ -181,7 +145,7 @@ private:
 	UFUNCTION()
 	void OnRep_CurrentAmmo();
 	UFUNCTION()
-	void FireWeapon();
+	void FireWeapon(int burst = 1);
 	UFUNCTION()
 	void LoadNewMagazine(bool bFreeFill = false);
 #pragma endregion
@@ -198,19 +162,19 @@ private:
 	void UpdateSkin(const EFirearmComponentType& componentType, const FString& skinName);
 #pragma endregion
 #pragma region Mesh Components
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"), Category = "Components")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<USkeletalMeshComponent> ReceiverMesh;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"), Category = "Components")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<USkeletalMeshComponent> AttachmentMesh;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"), Category = "Components")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<USkeletalMeshComponent> BarrelMesh;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"), Category = "Components")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<USkeletalMeshComponent> GripMesh;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"), Category = "Components")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<USkeletalMeshComponent> MagazineMesh;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"), Category = "Components")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<USkeletalMeshComponent> SightMesh;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"), Category = "Components")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<USkeletalMeshComponent> StockMesh;
 #pragma endregion
 #pragma region Component Data
