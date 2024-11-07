@@ -6,6 +6,57 @@
 #include "Engine/DataAsset.h"
 #include "ModularFirearmDataAssets.generated.h"
 
+UENUM(BlueprintType)
+enum EFirearmComponentType : uint8{
+	Receiver	=	0,
+	Attachment	=	1,
+	Barrel		=	2,
+	Grip		=	3,
+	Magazine	=	4,
+	Sight		=	5,
+	Stock		=	6,
+	Num			=	7	UMETA(Hidden)
+};
+
+UENUM(BlueprintType)
+enum EFiringType {
+	Automatic,
+	SemiAutomatic,
+	Burst
+};
+
+UENUM(BlueprintType)
+enum ETargetingMode{
+	FocalPoint,
+	DirectionOfMuzzle,
+	CursorLocation
+};
+
+USTRUCT(BlueprintType)
+struct FScalableFirearmFloat {
+	GENERATED_BODY()
+public:
+	float Multiplier;
+	UCurveFloat* Curve;
+	FScalableFirearmFloat() :
+		Multiplier(1.f),
+		Curve(nullptr)
+	{}
+	FScalableFirearmFloat(float multiplier) :
+		Multiplier(multiplier),
+		Curve(nullptr) 
+	{}
+	FScalableFirearmFloat(float multiplier, UCurveFloat* curve) :
+		Multiplier(multiplier),
+		Curve(curve) 
+	{}
+	float GetValue(float modifier) {
+		if (IsValid(Curve)) {
+			return (Curve->GetFloatValue(modifier) * Multiplier);
+		}
+		return Multiplier;
+	}
+};
 
 /**
  * Classes for each type of Gun Component Data Asset
@@ -25,9 +76,9 @@ public:
 	UPROPERTY()
 	FString DefaultSkin;
 	UPROPERTY(EditAnywhere, Category = "Stats")
-	float GunDamage = 1.f;
+	FScalableFirearmFloat GunDamage = 1.f;
 	UPROPERTY(EditAnywhere, Category = "Stats")
-	float RoundsPerSecond = 5.f;
+	FScalableFirearmFloat RoundsPerSecond = 5.f;
 	UPROPERTY(EditAnywhere, Category = "Stats")
 	bool bAutomatic = true;
 	UPROPERTY(EditAnywhere, Category = "Stats")
@@ -55,15 +106,15 @@ class MODULARFIREARM_API UGunPartDataBase : public UDataAsset
 	GENERATED_BODY()
 public:
 	UPROPERTY(EditAnywhere)
-	FName PartName = "Gun Component";
+	FName ComponentName = "Gun Component";
 	UPROPERTY(EditAnywhere)
-	FText FirearmDescription = FText::FromString("Lorem ipsum");
+	FText ComponentDescription = FText::FromString("Lorem ipsum");
 	UPROPERTY(EditAnywhere)
 	TObjectPtr<USkeletalMesh> Mesh;
 	UPROPERTY(EditAnywhere)
 	TSubclassOf<UAnimInstance> DefaultAnimInstance;
 	UPROPERTY(EditAnywhere)
-	TMap<FString, UMaterialInterface*> AlternativeSkins;
+	TMap<FString, UMaterialInterface*> Skins;
 	UPROPERTY(EditAnywhere)
 	TObjectPtr<UMaterialInterface> Icon;
 };
@@ -77,9 +128,9 @@ class MODULARFIREARM_API UGunAttachmentData : public UGunPartDataBase
 public:
 		// This is basically FlashLights and lasers.
 	UPROPERTY(EditAnywhere)
-		float LightIntensity = 1.f;
+	FScalableFirearmFloat LightIntensity;
 	UPROPERTY(EditAnywhere)
-		class UNiagaraSystem* NiagaraBeamSystem;
+	class UNiagaraSystem* NiagaraBeamSystem;
 };
 #pragma endregion
 #pragma region Barrel
@@ -89,14 +140,14 @@ class MODULARFIREARM_API UGunBarrelData : public UGunPartDataBase
 	GENERATED_BODY()
 public:
 	UPROPERTY(EditAnywhere)
-		float bulletSpreadDegree = 0.f;
+	FScalableFirearmFloat bulletSpreadDegree = FScalableFirearmFloat(0);
 
 	// When Damage falloff begins to take affect. (If this is below 0 then there is no falloff.)
 	UPROPERTY(EditAnywhere)
-		float falloffBeginDistance = -1.f;
+	FScalableFirearmFloat falloffBeginDistance = FScalableFirearmFloat(-1.f);
 	// Distance where the falloff ends. (End distance is BeginDistance + Duration)
 	UPROPERTY(EditAnywhere)
-		float falloffDuration = 0.f;
+	FScalableFirearmFloat falloffDuration = FScalableFirearmFloat(0.f);
 	// Curve used to alter damage for falloff. 0 = BeginDistance, 1 = BeginDistance + Duration
 	UPROPERTY(EditAnywhere)
 		UCurveFloat* falloffCurve;
@@ -122,7 +173,7 @@ class MODULARFIREARM_API UGunGripData : public UGunPartDataBase
 {
 	GENERATED_BODY()
 public:
-		float recoilMultiplier = 1.f;
+	FScalableFirearmFloat recoilMultiplier;
 
 };
 #pragma endregion
@@ -133,9 +184,9 @@ class MODULARFIREARM_API UGunMagazineData : public UGunPartDataBase
 	GENERATED_BODY()
 public:
 	UPROPERTY(EditAnywhere)
-		int MaxAmmo = 1;
+	FScalableFirearmFloat MaxAmmo;
 	UPROPERTY(EditAnywhere)
-		float ReloadSpeedMultiplier = 1.f;
+	FScalableFirearmFloat ReloadSpeedMultiplier;
 };
 #pragma endregion
 #pragma region Sight
@@ -145,9 +196,9 @@ class MODULARFIREARM_API UGunSightData : public UGunPartDataBase
 	GENERATED_BODY()
 public:
 	UPROPERTY(EditAnywhere)
-		float FOVZoomMultiplier = 1.f;
+	FScalableFirearmFloat FOVZoomMultiplier;
 	UPROPERTY(EditAnywhere)
-		float FOVZoomAmount = 0.f;
+	FScalableFirearmFloat FOVZoomAmount;
 	UPROPERTY(EditAnywhere)
 	FVector CameraAimOffset = FVector(0, 0, 0);
 };
@@ -159,10 +210,12 @@ class MODULARFIREARM_API UGunStockData : public UGunPartDataBase
 	GENERATED_BODY()
 public:
 	UPROPERTY(EditAnywhere)
-		float recoilMultiplierDuration = 1.f;
+	FScalableFirearmFloat recoilMultiplierDuration;
 	UPROPERTY(EditAnywhere)
-		UCurveLinearColor* RecoilMultiplier;
+	UCurveLinearColor* BaseRecoil;
 	UPROPERTY(EditAnywhere)
-		float swapMultiplier = 1.f;
+	FScalableFirearmFloat RecoilMultiplier;
+	UPROPERTY(EditAnywhere)
+	FScalableFirearmFloat swapMultiplier;
 };
 #pragma endregion

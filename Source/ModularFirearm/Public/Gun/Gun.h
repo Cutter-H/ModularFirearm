@@ -4,57 +4,12 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "ModularFirearmDataAssets.h"
 #include "Gun.generated.h"
 
-USTRUCT(BlueprintType)
-struct FGunData
-{
-public:
-	GENERATED_USTRUCT_BODY()
-	
-	UPROPERTY(EditAnywhere, Category = "Info")
-		FString FirearmName = "Firearm";
-	UPROPERTY(EditAnywhere, Category = "Info")
-		FString FirearmDescription = "A gun.";
-	UPROPERTY(EditAnywhere, Category = "Info")
-		UMaterialInstance* Icon;
-	UPROPERTY(EditAnywhere, Category = "Info")
-		class UModularFirearmData* DefaultComponents;
-
-	
-
-	UPROPERTY(EditAnywhere, Category = "Stats")
-		float GunDamage = 1.f;
-	UPROPERTY(EditAnywhere, Category = "Stats")
-		float RoundsPerSecond = 5.f;
-	UPROPERTY(EditAnywhere, Category = "Stats")
-		bool bAutomatic = true;
-	UPROPERTY(EditAnywhere, Category = "Stats")
-		TSubclassOf<AActor> BulletClass;
-	
-	
-
-};
-
-UENUM(BlueprintType)
-enum EFirearmComponentType {
-	Attachment,
-	Barrel,
-	Grip,
-	Magazine,
-	Sight,
-	Stock
-};
-
-class UModularFirearmData;
-class UGunPartDataBase;
-class UGunAttachmentData;
-class UGunBarrelData;
-class UGunGripData;
-class UGunMagazineData;
-class UGunSightData;
-class UGunStockData;
-
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAmmoChangeSignature, int, newAmmo);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBulletSpawnSignature, AActor*, newBullet);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPlayAnimationSignature, UAnimMontage*, montage);
 
 UCLASS()
 class MODULARFIREARM_API AModularFirearm : public AActor
@@ -62,8 +17,11 @@ class MODULARFIREARM_API AModularFirearm : public AActor
 	GENERATED_BODY()
 	
 public:	
-	AModularFirearm();
-
+	FOnAmmoChangeSignature OnCurrentAmmoChange;
+	FOnBulletSpawnSignature OnBulletSpawn;
+	FOnPlayAnimationSignature OnFiringMontagePlay;
+	FOnPlayAnimationSignature OnReloadMontagePlay;
+	FOnPlayAnimationSignature OnReloadMontageStop;
 	UFUNCTION(BlueprintCallable, Category = "Firearm|Attachment")
 	void SetComponent(const EFirearmComponentType& componentType, UGunPartDataBase* newComponent);
 
@@ -76,28 +34,72 @@ public:
 	void StopFiring();
 
 	UFUNCTION(BlueprintCallable, Category = "Firearm|Reload")
-	void Reload();
+	void StartReloading();
+	UFUNCTION(BlueprintCallable, Category = "Firearm|Reload")
+	void StopReloading();
+
+	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
+	int GetCurrentAmmo() const { return CurrentMagazineAmmo + bBulletLoaded; }
+	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
+	int GetMaxAmmo() const;
+	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
+	float GetFireRate() const;
+	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
+	FTransform GetMuzzleTransform() const;
+	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
+	TSubclassOf<AActor> GetBulletClass() const;
+	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
+	float GetReloadSpeedModifier() const;
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Firearm|Getters")
+	int GetReserveAmmo() const;
+	UFUNCTION(BlueprintImplementableEvent, BlueprintCallable, BlueprintAuthorityOnly, Category = "Firearm|Setters")
+	void SetReserveAmmo(int newReserveAmmo);
 
 protected:
 #pragma region Firearm Variables
-	UPROPERTY(EditAnywhere, Category = "Info", meta = (DisplayPriority = 1))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Info", meta = (DisplayPriority = 1))
 	FString FirearmName = "Firearm";
-	UPROPERTY(EditAnywhere, Category = "Info", meta = (DisplayPriority = 1))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Info", meta = (DisplayPriority = 1))
 	FString FirearmDescription = "A gun.";
-	UPROPERTY(EditAnywhere, Category = "Info", meta = (DisplayPriority = 1))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Info", meta = (DisplayPriority = 1))
 	TObjectPtr<UMaterialInstance> Icon;
-	UPROPERTY(EditAnywhere, Category = "Info", meta = (DisplayPriority = 1))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Info", meta = (DisplayPriority = 1))
 	FString DefaultSkin;
-	UPROPERTY(EditAnywhere, Category = "Info", meta = (DisplayPriority = 1))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Info", meta = (DisplayPriority = 1))
+	TMap<FString, UMaterialInterface*> Skins;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Info", meta = (DisplayPriority = 1, ExposeOnSpawn = "true"))
 	TObjectPtr<UModularFirearmData> DefaultParts;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Info", meta = (DisplayPriority = 1, ExposeOnSpawn = "true"))
+	bool bStartWithWeaponLoaded = true;
 	UPROPERTY(EditAnywhere, Category = "Stats", meta = (DisplayPriority = 2))
-	float GunDamage = 1.f;
+	FScalableFirearmFloat GunDamageMultiplier;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Info", meta = (DisplayPriority = 1))
+	FScalableFirearmFloat MultiShot;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Info", meta = (DisplayPriority = 1), AdvancedDisplay)
+	bool bPlayMontagesFromExternalSource = false;
 	UPROPERTY(EditAnywhere, Category = "Stats", meta = (DisplayPriority = 2))
-	float RoundsPerSecond = 5.f;
+	TEnumAsByte<EFiringType> FiringType;
 	UPROPERTY(EditAnywhere, Category = "Stats", meta = (DisplayPriority = 2))
-	bool bAutomatic = true;
+	TEnumAsByte<ETargetingMode> TargetingMode;
 	UPROPERTY(EditAnywhere, Category = "Stats", meta = (DisplayPriority = 2))
-	TSubclassOf<AActor> BulletClass;
+	TEnumAsByte<ECollisionChannel> TargetingChannel = ECollisionChannel::ECC_Visibility;
+	UPROPERTY(EditAnywhere, Category = "Stats", meta = (DisplayPriority = 2))
+	bool bContinuousFire = true;
+	UPROPERTY(EditAnywhere, Category = "Stats", meta = (DisplayPriority = 2))
+	FScalableFirearmFloat RoundsPerSecond = 5.f;
+	UPROPERTY(EditAnywhere, Category = "Stats", meta = (DisplayPriority = 2), AdvancedDisplay)
+	bool bRecycleAmmoOnReload = true;
+#pragma endregion
+#pragma region Cosmetics
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cosmetics")
+	TObjectPtr<UAnimMontage> FiringMontage;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cosmetics")
+	TObjectPtr<UAnimMontage> ReloadMontage;
+
+	UFUNCTION(NetMulticast, Reliable)
+	void PlayReplicatedMontage(UAnimMontage* montage, const FString& info = "");
+	UFUNCTION()
+	void OnReceiverMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 #pragma endregion
 #pragma region Attachment Names
 	UPROPERTY(EditDefaultsOnly, AdvancedDisplay, Category = "Info|AttachmentNames", meta = (DisplayPriority = 1))
@@ -113,21 +115,50 @@ protected:
 	UPROPERTY(EditDefaultsOnly, AdvancedDisplay, Category = "Info|AttachmentNames", meta = (DisplayPriority = 1))
 	FName StockBoneName = "Stock";
 #pragma endregion
-	
+	AModularFirearm();
 	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray< FLifetimeProperty >& OutLifetimeProps) const override;
 
 private:
-	UPROPERTY(Replicated, ReplicatedUsing = OnRep_CurrentSkins)
-	TArray<FString> CurrentSkins;
-	UFUNCTION()
-	void OnRep_CurrentSkins(TArray<FString> oldArray);
+#pragma region Bullet Functionality
+	UPROPERTY(Replicated, ReplicatedUsing = OnRep_CurrentAmmo)
+	bool bBulletLoaded = false;
+	UPROPERTY(Replicated)
+	int CurrentMagazineAmmo = 0;
+	UPROPERTY()
+	FTimerHandle FiringTimer;
+	UPROPERTY()
+	bool bWantsToFire = false;
+	UPROPERTY()
+	bool bReloading = false;
 
 	UFUNCTION(Server, Reliable)
-	void SetComponentOnServer(EFirearmComponentType componentType, UGunPartDataBase* newComponent);
+	void ReloadOnServer(bool start = true);
 	UFUNCTION(Server, Reliable)
-	void SetComponentSkinOnServer(EFirearmComponentType componentType, const FString& skinName);
+	void SpawnBullet(const FVector& targetLocation);
+	UFUNCTION()
+	void OnRep_CurrentAmmo();
+	UFUNCTION()
+	void FireWeapon();
+	UFUNCTION()
+	void LoadNewMagazine(bool bFreeFill = false);
+#pragma endregion
+	UPROPERTY(Replicated, meta = (ArraySizeEnum = "EFirearmComponentType"))
+	TArray<FString> ComponentSkins;
+	UPROPERTY(Replicated, ReplicatedUsing = OnRep_FirearmLevel)
+	int FirearmLevel = 1;
+	UFUNCTION(NetMulticast, Reliable)
+	void ReplicateSkinChange(const EFirearmComponentType& componentType, const FString& skinName);
+	UFUNCTION()
+	void OnRep_FirearmLevel();
+	UFUNCTION(Server, Reliable)
+	void SetComponentOnServer(const EFirearmComponentType& componentType, UGunPartDataBase* newComponent);
+	UFUNCTION(Server, Reliable)
+	void SetComponentSkinOnServer(const EFirearmComponentType& componentType, const FString& skinName);
+	UFUNCTION()
+	void UpdateSkin(const EFirearmComponentType& componentType, const FString& skinName);
+
 
 #pragma region Mesh Components
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"), Category = "Components")
