@@ -50,7 +50,7 @@ public:
 		Multiplier(multiplier),
 		Curve(curve) 
 	{}
-	float GetValue(float modifier) {
+	float GetValue(float modifier) const {
 		if (IsValid(Curve)) {
 			return (Curve->GetFloatValue(modifier) * Multiplier);
 		}
@@ -127,9 +127,9 @@ class MODULARFIREARM_API UGunAttachmentData : public UGunPartDataBase
 	GENERATED_BODY()
 public:
 		// This is basically FlashLights and lasers.
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(EditAnywhere, Category = "Attachment")
 	FScalableFirearmFloat LightIntensity;
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(EditAnywhere, Category = "Attachment")
 	class UNiagaraSystem* NiagaraBeamSystem;
 };
 #pragma endregion
@@ -139,30 +139,27 @@ class MODULARFIREARM_API UGunBarrelData : public UGunPartDataBase
 {
 	GENERATED_BODY()
 public:
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(EditAnywhere, Category = "Barrel")
 	FScalableFirearmFloat bulletSpreadDegree = FScalableFirearmFloat(0);
 
 	// When Damage falloff begins to take affect. (If this is below 0 then there is no falloff.)
-	UPROPERTY(EditAnywhere)
+	/*/UPROPERTY(EditAnywhere)
 	FScalableFirearmFloat falloffBeginDistance = FScalableFirearmFloat(-1.f);
 	// Distance where the falloff ends. (End distance is BeginDistance + Duration)
 	UPROPERTY(EditAnywhere)
 	FScalableFirearmFloat falloffDuration = FScalableFirearmFloat(0.f);
 	// Curve used to alter damage for falloff. 0 = BeginDistance, 1 = BeginDistance + Duration
 	UPROPERTY(EditAnywhere)
-		UCurveFloat* falloffCurve;
+		UCurveFloat* falloffCurve;/**/
 	// Niagara system when firing.
-	UPROPERTY(EditAnywhere)
-		class UNiagaraSystem* MuzzleFlash;
-	// Cascade system when firing.
-	UPROPERTY(EditAnywhere)
-		class UParticleSystem* MuzzleFlash_Cascade;
+	UPROPERTY(EditAnywhere, Category = "Barrel")
+	class UNiagaraSystem* MuzzleFlash;
 	// Audio played when firing.
-	UPROPERTY(EditAnywhere)
-		USoundBase* FiringSound;
+	UPROPERTY(EditAnywhere, Category = "Barrel")
+	USoundBase* FiringSound;
 	// For AI Noise
-	UPROPERTY(EditAnywhere)
-		float NoiseAmount = 0.f;
+	UPROPERTY(EditAnywhere, Category = "Barrel")
+	FScalableFirearmFloat NoiseAmount = FScalableFirearmFloat(0.f);
 
 
 };
@@ -173,8 +170,17 @@ class MODULARFIREARM_API UGunGripData : public UGunPartDataBase
 {
 	GENERATED_BODY()
 public:
+	// Multiplies the default cam shake. The base value is found in the stock component.
+	UPROPERTY(EditAnywhere, Category = "Grip")
 	FScalableFirearmFloat recoilMultiplier;
-
+	// The base haptic feedback class
+	UPROPERTY(EditAnywhere, Category = "Grip")
+	TObjectPtr<UForceFeedbackEffect> HapticFeedback;
+	// Changes the intensity of the haptic feedback based on firearm level.
+	UPROPERTY(EditAnywhere, Category = "Grip")
+	FScalableFirearmFloat HapticIntensity;
+	UPROPERTY(EditAnywhere, Category = "Grip")
+	FScalableFirearmFloat CamShakeIntensity;
 };
 #pragma endregion
 #pragma region Magazine
@@ -184,9 +190,12 @@ class MODULARFIREARM_API UGunMagazineData : public UGunPartDataBase
 	GENERATED_BODY()
 public:
 	UPROPERTY(EditAnywhere)
+	TSubclassOf<AActor> BulletClass;
+	UPROPERTY(EditAnywhere)
 	FScalableFirearmFloat MaxAmmo;
 	UPROPERTY(EditAnywhere)
 	FScalableFirearmFloat ReloadSpeedMultiplier;
+
 };
 #pragma endregion
 #pragma region Sight
@@ -195,11 +204,11 @@ class MODULARFIREARM_API UGunSightData : public UGunPartDataBase
 {
 	GENERATED_BODY()
 public:
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(EditAnywhere, Category = "Sight")
 	FScalableFirearmFloat FOVZoomMultiplier;
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(EditAnywhere, Category = "Sight")
 	FScalableFirearmFloat FOVZoomAmount;
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(EditAnywhere, Category = "Sight")
 	FVector CameraAimOffset = FVector(0, 0, 0);
 };
 #pragma endregion
@@ -209,13 +218,15 @@ class MODULARFIREARM_API UGunStockData : public UGunPartDataBase
 {
 	GENERATED_BODY()
 public:
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(EditAnywhere, Category = "Stock")
 	FScalableFirearmFloat recoilMultiplierDuration;
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(EditAnywhere, Category = "Stock")
 	UCurveLinearColor* BaseRecoil;
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(EditAnywhere, Category = "Stock")
 	FScalableFirearmFloat RecoilMultiplier;
-	UPROPERTY(EditAnywhere)
-	FScalableFirearmFloat swapMultiplier;
+	UPROPERTY(EditAnywhere, Category = "Stock")
+	FScalableFirearmFloat SwapMultiplier;
+	UPROPERTY(EditAnywhere, Category = "Stock")
+	TSubclassOf<UCameraShakeBase> CamShake;
 };
 #pragma endregion

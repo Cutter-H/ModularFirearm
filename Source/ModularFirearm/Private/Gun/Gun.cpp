@@ -1,4 +1,4 @@
-// Cutter Hodnett // 2022-
+// Cutter Hodnett // 2024
 
 
 #include "Gun/Gun.h"
@@ -23,22 +23,15 @@ void AModularFirearm::BeginFiring() {
 void AModularFirearm::StopFiring() {
 	bWantsToFire = false;
 }
-void AModularFirearm::ReloadOnServer(bool start) {
-	if (UAnimInstance* animInst = ReceiverMesh->GetAnimInstance()) {
-		bool reloadActive = animInst->Montage_IsPlaying(ReloadMontage);
-		if (!reloadActive) {
-			return;
-		}
-	}
-	PlayReplicatedMontage(ReloadMontage, "Reload");
-}
-void AModularFirearm::SpawnBullet(const FVector& targetLocation) {
+void AModularFirearm::SpawnBullet_Implementation(const FVector& targetLocation) {
 	TSubclassOf<AActor> bulletClass = GetBulletClass();
 	if (!IsValid(bulletClass)) {
 		return;
 	}
 	FTransform spawnTransform = GetMuzzleTransform();
-	spawnTransform.SetRotation(FQuat::MakeFromRotator(UKismetMathLibrary::FindLookAtRotation(spawnTransform.GetLocation(), targetLocation)));
+	FVector direction = UKismetMathLibrary::FindLookAtRotation(spawnTransform.GetLocation(), targetLocation).Vector();
+	direction = UKismetMathLibrary::RandomUnitVectorInConeInDegrees(direction, GetBulletSpread());
+	spawnTransform.SetRotation(FQuat::MakeFromRotator(direction.Rotation()));
 	FActorSpawnParameters spawnParams;
 	spawnParams.Owner = this; spawnParams.Instigator = GetInstigator(); spawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	AActor* bullet = GetWorld()->SpawnActor<AActor>(bulletClass, spawnTransform, spawnParams);
@@ -107,6 +100,18 @@ void AModularFirearm::FireWeapon() {
 			}
 		}
 		SpawnBullet(targetLocation);
+		if (GetCamShake()) {
+			if (IsValid(GetInstigator())) {
+				if (APlayerController* pCon = GetInstigator()->GetController<APlayerController>()) {
+					if (APlayerCameraManager* camMan = pCon->PlayerCameraManager) {
+						camMan->StartCameraShake(GetCamShake(), GetCamShakeIntensity());
+					}
+				}
+			}
+		}
+		if (GetHapticFeedback()) {
+			UGameplayStatics::SpawnForceFeedbackAttached(GetHapticFeedback(), ReceiverMesh, GripBoneName, FVector(), FRotator(), EAttachLocation::SnapToTarget, true, false, GetHapticIntensity());
+		}
 	}
 }
 #pragma endregion
@@ -120,14 +125,14 @@ void AModularFirearm::StartReloading() {
 void AModularFirearm::StopReloading() {
 	ReloadOnServer(false);
 }
-int AModularFirearm::GetMaxAmmo() const {
-	if (IsValid(Magazine)) {
-		return Magazine->MaxAmmo.GetValue(FirearmLevel);
+void AModularFirearm::ReloadOnServer_Implementation(bool start) {
+	if (UAnimInstance* animInst = ReceiverMesh->GetAnimInstance()) {
+		bool reloadActive = animInst->Montage_IsPlaying(ReloadMontage);
+		if (!reloadActive) {
+			return;
+		}
 	}
-	return 1;
-}
-int AModularFirearm::GetReserveAmmo() const {
-	return GetMaxAmmo();
+	PlayReplicatedMontage(ReloadMontage, "Reload");
 }
 void AModularFirearm::LoadNewMagazine(bool bFreeFill) {
 	if (!HasAuthority() || GetReserveAmmo() <= 0) {
@@ -148,12 +153,83 @@ void AModularFirearm::LoadNewMagazine(bool bFreeFill) {
 		}
 	}
 	if (!bBulletLoaded) {
-		bBulletLoaded = true; 
+		bBulletLoaded = true;
 		--CurrentMagazineAmmo;
 	}
 }
 #pragma endregion
-void AModularFirearm::PlayReplicatedMontage(UAnimMontage* montage, const FString& info) {
+#pragma region Getters/Setters
+int AModularFirearm::GetMaxAmmo() const {
+	if (IsValid(Magazine)) {
+		return Magazine->MaxAmmo.GetValue(FirearmLevel);
+	}
+	return DefaultMaxAmmo.GetValue(FirearmLevel);
+}
+float AModularFirearm::GetBulletSpread() const {
+	if (IsValid(Barrel)) {
+		return Barrel->bulletSpreadDegree.GetValue(FirearmLevel);
+	}
+	return 0.f;
+}
+float AModularFirearm::GetNoise() const {
+	if (IsValid(Barrel)) {
+		return Barrel->NoiseAmount.GetValue(FirearmLevel);
+	}
+	return DefaultNoise.GetValue(FirearmLevel);
+}
+UForceFeedbackEffect* AModularFirearm::GetHapticFeedback() const {
+	if (IsValid(Grip)) {
+		return Grip->HapticFeedback;
+	}	
+	return DefaultFiringHaptic;
+}
+float AModularFirearm::GetHapticIntensity() const  {
+	if (IsValid(Grip)) {
+		return Grip->HapticIntensity.GetValue(FirearmLevel);
+	}
+	return 1.f;
+}
+TSubclassOf<UCameraShakeBase> AModularFirearm::GetCamShake() const  {
+	if (IsValid(Stock)) {
+		return Stock->CamShake;
+	}
+	return DefaultCamShake;
+}
+float AModularFirearm::GetCamShakeIntensity() const {
+	if (IsValid(Grip)) {
+		return Grip->CamShakeIntensity.GetValue(FirearmLevel);
+	}
+	return 1.0f;
+}
+float AModularFirearm::GetFireRate() const {
+	return RoundsPerSecond.GetValue(FirearmLevel);
+}
+FTransform AModularFirearm::GetMuzzleTransform() const {
+	if (IsValid(BarrelMesh)) {
+		return BarrelMesh->GetSocketTransform(MuzzleSocketName);
+	}
+	if (IsValid(ReceiverMesh)) {
+		return ReceiverMesh->GetSocketTransform(MuzzleSocketName);
+	}
+	return GetActorTransform();
+}
+TSubclassOf<AActor> AModularFirearm::GetBulletClass() const {
+	if (IsValid(Magazine)) {
+		return Magazine->BulletClass;
+	}
+	return TSubclassOf<AActor>();
+}
+float AModularFirearm::GetReloadSpeedModifier() const {
+	if (IsValid(Magazine)) {
+		return Magazine->ReloadSpeedMultiplier.GetValue(FirearmLevel);
+	}
+	return 1.0f;
+}
+int AModularFirearm::GetReserveAmmo_Implementation() const {
+	return GetMaxAmmo();
+}
+#pragma endregion
+void AModularFirearm::PlayReplicatedMontage_Implementation(UAnimMontage* montage, const FString& info) {
 	if (!IsValid(ReceiverMesh)) {
 		return;
 	}
@@ -184,6 +260,9 @@ void AModularFirearm::PlayReplicatedMontage(UAnimMontage* montage, const FString
 void AModularFirearm::OnReceiverMontageEnded(UAnimMontage* Montage, bool bInterrupted) {
 	if (Montage == ReloadMontage) {
 		bReloading = false;
+		if (!bInterrupted) {
+			LoadNewMagazine();
+		}
 	}
 }
 #pragma region Overrides
@@ -287,7 +366,7 @@ void AModularFirearm::OnConstruction(const FTransform& Transform) {
 }
 void AModularFirearm::BeginPlay() {
 	Super::BeginPlay();
-	if (HasAuthority && bStartWithWeaponLoaded) {
+	if (HasAuthority() && bStartWithWeaponLoaded) {
 		bBulletLoaded = true;
 		CurrentMagazineAmmo = GetMaxAmmo() - 1;
 	}
@@ -415,7 +494,7 @@ void AModularFirearm::SetComponentSkin(const EFirearmComponentType& componentTyp
 	UpdateSkin(componentType, skinName);
 	ComponentSkins[componentType] = skinName;
 }
-void AModularFirearm::ReplicateSkinChange(const EFirearmComponentType& componentType, const FString& skinName) {
+void AModularFirearm::ReplicateSkinChange_Implementation(const EFirearmComponentType& componentType, const FString& skinName) {
 	UpdateSkin(componentType, skinName);
 }
 void AModularFirearm::OnRep_FirearmLevel() {
@@ -481,12 +560,12 @@ void AModularFirearm::UpdateSkin(const EFirearmComponentType& componentType, con
 	}
 	}
 }
-void AModularFirearm::SetComponentOnServer_Implmentation(const EFirearmComponentType& componentType, UGunPartDataBase* newComponent) {
+void AModularFirearm::SetComponentOnServer_Implementation(const EFirearmComponentType& componentType, UGunPartDataBase* newComponent) {
 	if (HasAuthority()) {
 		SetComponent(componentType, newComponent);
 	}
 }
-void AModularFirearm::SetComponentSkinOnServer_Implmentation(const EFirearmComponentType& componentType, const FString& skinName) {
+void AModularFirearm::SetComponentSkinOnServer_Implementation(const EFirearmComponentType& componentType, const FString& skinName) {
 	if (HasAuthority()) {
 		SetComponentSkin(componentType, skinName);
 	}

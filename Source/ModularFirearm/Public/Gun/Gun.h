@@ -1,4 +1,4 @@
-// Cutter Hodnett // 2022-
+// Cutter Hodnett // 2024
 
 #pragma once
 
@@ -17,11 +17,19 @@ class MODULARFIREARM_API AModularFirearm : public AActor
 	GENERATED_BODY()
 	
 public:	
+#pragma region Delegates
+	UPROPERTY(BlueprintAssignable, Category = "Firearm")
 	FOnAmmoChangeSignature OnCurrentAmmoChange;
+	UPROPERTY(BlueprintAssignable, Category = "Firearm")
 	FOnBulletSpawnSignature OnBulletSpawn;
+	UPROPERTY(BlueprintAssignable, Category = "Firearm")
 	FOnPlayAnimationSignature OnFiringMontagePlay;
+	UPROPERTY(BlueprintAssignable, Category = "Firearm")
 	FOnPlayAnimationSignature OnReloadMontagePlay;
+	UPROPERTY(BlueprintAssignable, Category = "Firearm")
 	FOnPlayAnimationSignature OnReloadMontageStop;
+#pragma endregion
+#pragma region Core Functions
 	UFUNCTION(BlueprintCallable, Category = "Firearm|Attachment")
 	void SetComponent(const EFirearmComponentType& componentType, UGunPartDataBase* newComponent);
 
@@ -37,11 +45,24 @@ public:
 	void StartReloading();
 	UFUNCTION(BlueprintCallable, Category = "Firearm|Reload")
 	void StopReloading();
-
+#pragma endregion
+#pragma region Getters/Setters
 	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
 	int GetCurrentAmmo() const { return CurrentMagazineAmmo + bBulletLoaded; }
 	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
 	int GetMaxAmmo() const;
+	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
+	float GetBulletSpread() const;
+	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
+	float GetNoise() const;
+	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
+	UForceFeedbackEffect* GetHapticFeedback() const;
+	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
+	float GetHapticIntensity() const;
+	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
+	TSubclassOf<UCameraShakeBase> GetCamShake() const;
+	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
+	float GetCamShakeIntensity() const;
 	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
 	float GetFireRate() const;
 	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
@@ -54,7 +75,7 @@ public:
 	int GetReserveAmmo() const;
 	UFUNCTION(BlueprintImplementableEvent, BlueprintCallable, BlueprintAuthorityOnly, Category = "Firearm|Setters")
 	void SetReserveAmmo(int newReserveAmmo);
-
+#pragma endregion
 protected:
 #pragma region Firearm Variables
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Info", meta = (DisplayPriority = 1))
@@ -86,9 +107,27 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Stats", meta = (DisplayPriority = 2))
 	bool bContinuousFire = true;
 	UPROPERTY(EditAnywhere, Category = "Stats", meta = (DisplayPriority = 2))
-	FScalableFirearmFloat RoundsPerSecond = 5.f;
+	FScalableFirearmFloat RoundsPerSecond = FScalableFirearmFloat(5.f);
 	UPROPERTY(EditAnywhere, Category = "Stats", meta = (DisplayPriority = 2), AdvancedDisplay)
 	bool bRecycleAmmoOnReload = true;
+
+	UPROPERTY(Replicated, meta = (ArraySizeEnum = "EFirearmComponentType"))
+	TArray<FString> ComponentSkins;
+	UPROPERTY(Replicated, ReplicatedUsing = OnRep_FirearmLevel)
+	int FirearmLevel = 1;
+#pragma endregion
+#pragma region Component Defaults
+	UPROPERTY(EditAnywhere, Category = "Stats|ComponentFallbacks|Barrel")
+	FScalableFirearmFloat DefaultBulletSpread = FScalableFirearmFloat(0);
+	UPROPERTY(EditAnywhere, Category = "Stats|ComponentFallbacks|Barrel")
+	FScalableFirearmFloat DefaultNoise = FScalableFirearmFloat(0);
+	UPROPERTY(EditAnywhere, Category = "Stats|ComponentFallbacks|Grip")
+	TObjectPtr<UForceFeedbackEffect> DefaultFiringHaptic;
+	UPROPERTY(EditAnywhere, Category = "Stats|ComponentFallbacks|Magazine")
+	FScalableFirearmFloat DefaultMaxAmmo = FScalableFirearmFloat(30);
+	UPROPERTY(EditAnywhere, Category = "Stats|ComponentFallbacks|Stock")
+	TSubclassOf<UCameraShakeBase> DefaultCamShake;
+	
 #pragma endregion
 #pragma region Cosmetics
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cosmetics")
@@ -102,6 +141,8 @@ protected:
 	void OnReceiverMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 #pragma endregion
 #pragma region Attachment Names
+	UPROPERTY(EditAnywhere, Category = "Info|AttachmentNames")
+	FName MuzzleSocketName = "Muzzle";
 	UPROPERTY(EditDefaultsOnly, AdvancedDisplay, Category = "Info|AttachmentNames", meta = (DisplayPriority = 1))
 	FName AttachmentBoneName = "Attachment";
 	UPROPERTY(EditDefaultsOnly, AdvancedDisplay, Category = "Info|AttachmentNames", meta = (DisplayPriority = 1))
@@ -144,10 +185,7 @@ private:
 	UFUNCTION()
 	void LoadNewMagazine(bool bFreeFill = false);
 #pragma endregion
-	UPROPERTY(Replicated, meta = (ArraySizeEnum = "EFirearmComponentType"))
-	TArray<FString> ComponentSkins;
-	UPROPERTY(Replicated, ReplicatedUsing = OnRep_FirearmLevel)
-	int FirearmLevel = 1;
+#pragma region Replication
 	UFUNCTION(NetMulticast, Reliable)
 	void ReplicateSkinChange(const EFirearmComponentType& componentType, const FString& skinName);
 	UFUNCTION()
@@ -158,8 +196,7 @@ private:
 	void SetComponentSkinOnServer(const EFirearmComponentType& componentType, const FString& skinName);
 	UFUNCTION()
 	void UpdateSkin(const EFirearmComponentType& componentType, const FString& skinName);
-
-
+#pragma endregion
 #pragma region Mesh Components
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"), Category = "Components")
 	TObjectPtr<USkeletalMeshComponent> ReceiverMesh;
