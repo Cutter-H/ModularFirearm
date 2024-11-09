@@ -66,6 +66,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
 	float GetFireRate() const;
 	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
+	float GetBurstSpeed() const;
+	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
+	int GetBurstAmount() const;
+	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
 	FTransform GetMuzzleTransform() const;
 	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
 	TSubclassOf<AActor> GetBulletClass() const;
@@ -133,6 +137,8 @@ private:
 	int CurrentMagazineAmmo = 0;
 	UPROPERTY()
 	FTimerHandle FiringTimer;
+	UPROPERTY()
+	FTimerHandle RecoilTimer;
 	UPROPERTY()
 	bool bWantsToFire = false;
 	UPROPERTY()

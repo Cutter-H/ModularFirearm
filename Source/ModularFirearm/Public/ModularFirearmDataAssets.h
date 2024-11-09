@@ -19,7 +19,7 @@ enum EFirearmComponentType : uint8{
 };
 
 UENUM(BlueprintType)
-enum EFiringType {
+enum EFiringMode {
 	Automatic,
 	SemiAutomatic,
 	Burst
@@ -69,25 +69,29 @@ class MODULARFIREARM_API UModularFirearmData : public UDataAsset
 {
 	GENERATED_BODY()
 public:
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Info", meta = (DisplayPriority = 1))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm")
 	FString FirearmName = "Firearm";
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Info", meta = (DisplayPriority = 1))
-	FString FirearmDescription = "A gun.";
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Info", meta = (DisplayPriority = 1))
-	TObjectPtr<UMaterialInstance> Icon;
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Info", meta = (DisplayPriority = 1))
-	FString DefaultSkin = "Normal";
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Info", meta = (DisplayPriority = 1))
-	FScalableFirearmFloat MultiShot = FScalableFirearmFloat(0);
-	UPROPERTY(EditAnywhere, Category = "Firearm|Stats", meta = (DisplayPriority = 2))
-	FScalableFirearmFloat RoundsPerSecond = FScalableFirearmFloat(5.f);
-	UPROPERTY(EditAnywhere, Category = "Firearm|Stats", meta = (DisplayPriority = 2))
+	UPROPERTY(EditAnywhere, Category = "Firearm|Firing")
 	TEnumAsByte<ECollisionChannel> TargetingChannel = ECollisionChannel::ECC_Visibility;
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Info", meta = (DisplayPriority = 1), AdvancedDisplay)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Firing")
 	FName MuzzleSocketName = "Muzzle";
-	UPROPERTY(EditAnywhere, Category = "Firearm|Stats", meta = (DisplayPriority = 2), AdvancedDisplay)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Firing")
+	FScalableFirearmFloat MultiShot = FScalableFirearmFloat(0);
+	UPROPERTY(EditAnywhere, Category = "Firearm|Firing")
+	FScalableFirearmFloat RoundsPerSecond = FScalableFirearmFloat(5.f);
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Firing|Burst")
+	FScalableFirearmFloat BurstSpeed = FScalableFirearmFloat(8);
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Firing|Burst")
+	int BurstAmount = 3;
+
+
+
+	UPROPERTY(EditAnywhere, Category = "Firearm|Reloading")
 	bool bRecycleAmmoOnReload = true;
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Info", meta = (DisplayPriority = 1))
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Customization")
+	FString DefaultSkin = "Normal";
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Customization")
 	TMap<FString, UMaterialInterface*> Skins;
 
 	UPROPERTY(EditAnywhere, Category = "Components")
@@ -102,6 +106,8 @@ public:
 	TObjectPtr<UGunGripData> Grip;
 	UPROPERTY(EditAnywhere, Category = "Components")
 	TObjectPtr<UGunAttachmentData> Attachment;
+	UPROPERTY(EditAnywhere, Category = "Depr")
+	UStreamableRenderAsset* testing;
 };
 #pragma endregion
 

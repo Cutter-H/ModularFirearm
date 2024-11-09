@@ -11,15 +11,22 @@
 #pragma region Firing
 void AModularFirearm::BeginFiring() {
 	bWantsToFire = true;
-	if (FiringTimer.IsValid()) {
+	if (RecoilTimer.IsValid()) {
 		return;
 	}
 	if (FiringMode != EFiringMode::SemiAutomatic) {
 		float delay = 1 / GetFireRate();
-		FTimerDelegate timerDel;
-		timerDel.BindUObject(this, &AModularFirearm::FireWeapon, 1);
-		GetWorld()->GetTimerManager().SetTimer(FiringTimer, timerDel, delay, true);
+		FTimerDelegate fireDel;
+		int burstAmount = 1;
+		if (FiringMode == EFiringMode::Burst) {
+			burstAmount = GetBurstAmount();
+		}
+		if(FiringMode == EFiringMode::Automatic){
+			fireDel.BindUObject(this, &AModularFirearm::FireWeapon, 1);
+			GetWorld()->GetTimerManager().SetTimer(FiringTimer, fireDel, delay, true);
+		}
 	}
+	
 	FireWeapon();
 }
 void AModularFirearm::StopFiring() {
@@ -60,6 +67,10 @@ void AModularFirearm::FireWeapon(int burst) {
 	}
 	if (GetCurrentAmmo() > 0) {
 		FVector targetLocation;
+		ECollisionChannel targetChannel = ECollisionChannel::ECC_Visibility;
+		if (IsValid(FirearmData)) {
+			targetChannel = FirearmData->TargetingChannel;
+		}
 		/* Setup Targeting Location */ {
 			switch (TargetingMode) {
 			case ETargetingMode::FocalPoint: {
@@ -69,7 +80,7 @@ void AModularFirearm::FireWeapon(int burst) {
 						if (APlayerCameraManager* camMan = playerCon->PlayerCameraManager) {
 							FVector camLoc; FRotator camRot; camMan->GetCameraViewPoint(camLoc, camRot);
 							FCollisionQueryParams hitParams; hitParams.AddIgnoredActor(GetOwner()); hitParams.AddIgnoredActor(this); hitParams.bTraceComplex = true;
-							FHitResult hit;  if (GetWorld()->LineTraceSingleByChannel(hit, camLoc, camLoc + (camRot.Vector() * MAX_flt), FirearmData->TargetingChannel, hitParams)) {
+							FHitResult hit;  if (GetWorld()->LineTraceSingleByChannel(hit, camLoc, camLoc + (camRot.Vector() * MAX_flt), targetChannel, hitParams)) {
 								targetLocation = hit.ImpactPoint;
 							}
 							else {
@@ -90,7 +101,7 @@ void AModularFirearm::FireWeapon(int burst) {
 			case ETargetingMode::CursorLocation: {
 				APlayerController* playerCon = GetWorld()->GetFirstPlayerController();
 				FHitResult hit;
-				playerCon->GetHitResultUnderCursor(TargetingChannel, true, hit);
+				playerCon->GetHitResultUnderCursor(targetChannel, true, hit);
 				if (hit.bBlockingHit) {
 					targetLocation = hit.ImpactPoint;
 				}
@@ -116,6 +127,13 @@ void AModularFirearm::FireWeapon(int burst) {
 				UGameplayStatics::SpawnForceFeedbackAttached(GetHapticFeedback(), ReceiverMesh, FName(), FVector(), FRotator(), EAttachLocation::SnapToTarget, true, false, GetHapticIntensity());
 			}
 		}
+
+		/* Setup Recoiling */ {
+			FTimerDelegate recoilDel;
+			float delay = 1 / GetFireRate();
+			GetWorld()->GetTimerManager().SetTimer(RecoilTimer, recoilDel, delay, false);
+		}
+
 	}
 }
 #pragma endregion
@@ -147,9 +165,11 @@ void AModularFirearm::LoadNewMagazine(bool bFreeFill) {
 	}
 	else {
 		int missingAmmo = GetMaxAmmo() - CurrentMagazineAmmo;
-		if (bRecycleAmmoOnReload) {
-			CurrentMagazineAmmo = FMath::Clamp(GetReserveAmmo() + CurrentMagazineAmmo, 0, GetMaxAmmo());
-			SetReserveAmmo(FMath::Max(0, GetReserveAmmo() - missingAmmo));
+		if (IsValid(FirearmData)) {
+			if (FirearmData->bRecycleAmmoOnReload) {
+				CurrentMagazineAmmo = FMath::Clamp(GetReserveAmmo() + CurrentMagazineAmmo, 0, GetMaxAmmo());
+				SetReserveAmmo(FMath::Max(0, GetReserveAmmo() - missingAmmo));
+			}
 		}
 		else {
 			CurrentMagazineAmmo = FMath::Min(GetReserveAmmo(), GetMaxAmmo());
@@ -206,14 +226,33 @@ float AModularFirearm::GetCamShakeIntensity() const {
 	return 1.0f;
 }
 float AModularFirearm::GetFireRate() const {
-	return RoundsPerSecond.GetValue(FirearmLevel);
+	if (IsValid(FirearmData)) {
+		return FirearmData->RoundsPerSecond.GetValue(FirearmLevel);
+	}
+	return 5.f;
+}
+float AModularFirearm::GetBurstSpeed() const {
+	if (IsValid(FirearmData)) {
+		return FirearmData->BurstSpeed.GetValue(FirearmLevel);
+	}	
+	return 5.f;
+}
+int AModularFirearm::GetBurstAmount() const {
+	if (IsValid(FirearmData)) {
+		return FirearmData->BurstAmount;
+	}
+	return 3;
 }
 FTransform AModularFirearm::GetMuzzleTransform() const {
+	FName muzzleSocketName = "Muzzle";
+	if (IsValid(FirearmData)) {
+		muzzleSocketName = FirearmData->MuzzleSocketName;
+	}
 	if (IsValid(BarrelMesh)) {
-		return BarrelMesh->GetSocketTransform(MuzzleSocketName);
+		return BarrelMesh->GetSocketTransform(muzzleSocketName);
 	}
 	if (IsValid(ReceiverMesh)) {
-		return ReceiverMesh->GetSocketTransform(MuzzleSocketName);
+		return ReceiverMesh->GetSocketTransform(muzzleSocketName);
 	}
 	return GetActorTransform();
 }
@@ -325,6 +364,7 @@ AModularFirearm::AModularFirearm() {
 
 }
 void AModularFirearm::OnConstruction(const FTransform& Transform) {
+	FString skinName = "Normal";
 	if (FirearmData) {
 		if (FirearmData->Attachment)
 			if (FirearmData->Stock->Mesh)
@@ -344,9 +384,6 @@ void AModularFirearm::OnConstruction(const FTransform& Transform) {
 		if (FirearmData->Stock)
 			if (FirearmData->Stock->Mesh)
 				StockMesh->SetSkeletalMesh(FirearmData->Stock->Mesh);
-	}
-	FString skinName = DefaultSkin;
-	if (IsValid(FirearmData)) {
 		skinName = FirearmData->DefaultSkin;
 	}
 	if (Attachment) {
@@ -547,8 +584,8 @@ void AModularFirearm::OnRep_FirearmLevel() {
 void AModularFirearm::UpdateSkin(const EFirearmComponentType& componentType, const FString& skinName) {
 	switch (componentType) {
 	case EFirearmComponentType::Receiver: {
-		if (IsValid(ReceiverMesh)) {
-			if (UMaterialInterface* newMaterial = Skins.FindRef(skinName)) {
+		if (IsValid(ReceiverMesh) && IsValid(FirearmData)) {
+			if (UMaterialInterface* newMaterial = FirearmData->Skins.FindRef(skinName)) {
 				ReceiverMesh->SetMaterial(0, newMaterial);
 			}
 		}
