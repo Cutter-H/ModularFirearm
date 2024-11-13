@@ -122,7 +122,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "GunPart", meta = (DisplayPriority = 1))
 	FText ComponentDescription = FText::FromString("Lorem ipsum");
 	UPROPERTY(EditAnywhere, Category = "GunPart", meta = (DisplayPriority = 1))
-	TObjectPtr<USkeletalMesh> Mesh;
+	TObjectPtr<UStaticMesh> Mesh;
 	UPROPERTY(EditAnywhere, Category = "GunPart", meta = (DisplayPriority = 1))
 	TSubclassOf<UAnimInstance> DefaultAnimInstance;
 	UPROPERTY(EditAnywhere, Category = "GunPart", meta = (DisplayPriority = 1))
@@ -130,7 +130,8 @@ public:
 	UPROPERTY(EditAnywhere, Category = "GunPart", meta = (DisplayPriority = 1))
 	TObjectPtr<UMaterialInterface> Icon;
 	UPROPERTY(EditAnywhere, Category = "GunPart", meta = (DisplayPriority = 1))
-	FName SocketBoneName = "Attachment";
+	FName AttachSocketName = "Attachment";
+
 };
 
 #pragma endregion
@@ -153,29 +154,35 @@ class MODULARFIREARM_API UGunBarrelData : public UGunPartDataBase
 {
 	GENERATED_BODY()
 public:
-	UGunBarrelData() { SocketBoneName = "Barrel"; }
+	UGunBarrelData() { 
+		AttachSocketName = "Barrel"; 
+		ComponentName = "Default Barrel";
+	}
 	UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
 	FScalableFirearmFloat bulletSpreadDegree = FScalableFirearmFloat(0);
 
 	// When Damage falloff begins to take affect. (If this is below 0 then there is no falloff.)
-	/*/UPROPERTY(EditAnywhere)
+	UPROPERTY(EditAnywhereCategory = "Barrel", meta = (DisplayPriority = 2))
 	FScalableFirearmFloat falloffBeginDistance = FScalableFirearmFloat(-1.f);
 	// Distance where the falloff ends. (End distance is BeginDistance + Duration)
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(EditAnywhereCategory = "Barrel", meta = (DisplayPriority = 2))
 	FScalableFirearmFloat falloffDuration = FScalableFirearmFloat(0.f);
 	// Curve used to alter damage for falloff. 0 = BeginDistance, 1 = BeginDistance + Duration
-	UPROPERTY(EditAnywhere)
-		UCurveFloat* falloffCurve;/**/
+	UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
+	UCurveFloat* falloffCurve;
 	// Niagara system when firing.
 	UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
 	class UNiagaraSystem* MuzzleFlash;
 	// Audio played when firing.
 	UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
-	USoundBase* FiringSound;
+	USoundBase* DefaultFiringSound;
 	// For AI Noise
 	UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
 	FScalableFirearmFloat NoiseAmount = FScalableFirearmFloat(0.f);
 
+	UFUNCTION(BlueprintNativeEvent, Categpry = "Barrel")
+	USoundBase* GetFiringSound() const;
+	USoundBase* GetFiringSound_Implementation() const { return DefaultFiringSound; }
 
 };
 #pragma endregion
@@ -185,7 +192,10 @@ class MODULARFIREARM_API UGunGripData : public UGunPartDataBase
 {
 	GENERATED_BODY()
 public:
-	UGunGripData() { SocketBoneName = "Grip"; }
+	UGunGripData() { 
+		AttachSocketName = "Grip"; 
+		ComponentName = "Default Grip";
+	}
 	// Multiplies the default cam shake. The base value is found in the stock component.
 	UPROPERTY(EditAnywhere, Category = "Grip", meta = (DisplayPriority = 2))
 	FScalableFirearmFloat recoilMultiplier;
@@ -205,13 +215,23 @@ class MODULARFIREARM_API UGunMagazineData : public UGunPartDataBase
 {
 	GENERATED_BODY()
 public:
-	UGunMagazineData() { SocketBoneName = "Magazine"; }
+	UGunMagazineData() { 
+		AttachSocketName = "Magazine"; 
+		ComponentName = "Default Magazine";
+	}
 	UPROPERTY(EditAnywhere, Category = "Magazine", meta = (DisplayPriority = 2))
 	TArray<TSubclassOf<AActor>> BulletClasses;
 	UPROPERTY(EditAnywhere, Category = "Magazine", meta = (DisplayPriority = 2))
 	FScalableFirearmFloat MaxAmmo;
 	UPROPERTY(EditAnywhere, Category = "Magazine", meta = (DisplayPriority = 2))
 	FScalableFirearmFloat ReloadSpeedMultiplier;
+	UPROPERTY(EditAnywhere, Category = "Magazine", meta = (DisplayPriority = 2))
+	UAnimMontage* DefaultReloadMontage;
+	UFUNCTION(BlueprintNativeEvent, Categpry = "Magazine")
+	UAnimMontage* GetReloadMontage() const;
+	UAnimMontage* GetReloadMontage_Implementation() const {
+		return DefaultReloadMontage; }
+
 
 };
 #pragma endregion
@@ -221,7 +241,10 @@ class MODULARFIREARM_API UGunSightData : public UGunPartDataBase
 {
 	GENERATED_BODY()
 public:
-	UGunSightData() { SocketBoneName = "Sight"; }
+	UGunSightData() { 
+		AttachSocketName = "Sight";
+		ComponentName = "Default Sight";
+	}
 	UPROPERTY(EditAnywhere, Category = "Sight", meta = (DisplayPriority = 2))
 	FScalableFirearmFloat FOVZoomMultiplier;
 	UPROPERTY(EditAnywhere, Category = "Sight", meta = (DisplayPriority = 2))
@@ -236,7 +259,10 @@ class MODULARFIREARM_API UGunStockData : public UGunPartDataBase
 {
 	GENERATED_BODY()
 public:
-	UGunStockData() { SocketBoneName = "Stock"; }
+	UGunStockData() { 
+		AttachSocketName = "Stock";
+		ComponentName = "Default Stock";
+	}
 	UPROPERTY(EditAnywhere, Category = "Stock", meta = (DisplayPriority = 2))
 	FScalableFirearmFloat recoilMultiplierDuration;
 	UPROPERTY(EditAnywhere, Category = "Stock", meta = (DisplayPriority = 2))
