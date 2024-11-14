@@ -248,8 +248,11 @@ FTransform AModularFirearm::GetMuzzleTransform() const {
 	if (IsValid(FirearmData)) {
 		muzzleSocketName = FirearmData->MuzzleSocketName;
 	}
-	if (IsValid(BarrelMesh)) {
-		return BarrelMesh->GetSocketTransform(muzzleSocketName);
+	if (UStaticMeshComponent* muzzle = FindComponentByTag<UStaticMeshComponent>(FName("Muzzle"))) {
+		return muzzle->GetSocketTransform(muzzleSocketName);
+	}
+	if (UStaticMeshComponent* barrel = FindComponentByTag<UStaticMeshComponent>(FName("Barrel"))) {
+		return barrel->GetSocketTransform(muzzleSocketName);
 	}
 	if (IsValid(ReceiverMesh)) {
 		return ReceiverMesh->GetSocketTransform(muzzleSocketName);
@@ -319,108 +322,27 @@ AModularFirearm::AModularFirearm() {
 	ReceiverMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("ReceiverSkeletalMesh"));
 	SetRootComponent(ReceiverMesh);
 	ReceiverMesh->SetIsReplicated(true);
-
-	AttachmentMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("AttachmentMesh"));
-	if (IsValid(FirearmData) && IsValid(FirearmData->Attachment)) {
-		Attachment = FirearmData->Attachment;
-		AttachmentMesh->SetupAttachment(ReceiverMesh, Attachment->SocketBoneName);
-	}
-	AttachmentMesh->SetIsReplicated(true);
-
-	BarrelMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("BarrelMesh"));
-	if(IsValid(FirearmData) && IsValid(FirearmData->Barrel)){
-		Barrel = FirearmData->Barrel;
-		BarrelMesh->SetupAttachment(ReceiverMesh, Barrel->SocketBoneName);
-	}
-	BarrelMesh->SetIsReplicated(true);
-
-	GripMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("GripMesh"));
-	if (IsValid(FirearmData) && IsValid(FirearmData->Grip)) {
-		Grip = FirearmData->Grip;
-		GripMesh->SetupAttachment(ReceiverMesh, Grip->SocketBoneName);
-	}
-	GripMesh->SetIsReplicated(true);
-
-	MagazineMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("MagazineMesh"));
-	if (IsValid(FirearmData) && IsValid(FirearmData->Magazine)) {
-		Magazine = FirearmData->Magazine;
-		MagazineMesh->SetupAttachment(ReceiverMesh, Magazine->SocketBoneName);
-	}
-	MagazineMesh->SetIsReplicated(true);
-
-	SightMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("SightMesh"));
-	if (IsValid(FirearmData) && IsValid(FirearmData->Sight)) {
-		Sight = FirearmData->Sight;
-		SightMesh->SetupAttachment(ReceiverMesh, Magazine->SocketBoneName);
-	}
-	SightMesh->SetIsReplicated(true);
-
-	StockMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("StockMesh"));
-	if (IsValid(FirearmData) && IsValid(FirearmData->Stock)) {
-		Stock = FirearmData->Stock;
-		StockMesh->SetupAttachment(ReceiverMesh, Magazine->SocketBoneName);
-	}
-	StockMesh->SetIsReplicated(true);
-
 }
 void AModularFirearm::OnConstruction(const FTransform& Transform) {
 	FString skinName = "Normal";
-	if (FirearmData) {
-		if (FirearmData->Attachment)
-			if (FirearmData->Stock->Mesh)
-				AttachmentMesh->SetSkeletalMesh(FirearmData->Attachment->Mesh);
-		if (FirearmData->Barrel)
-			if (FirearmData->Barrel->Mesh)
-				BarrelMesh->SetSkeletalMesh(FirearmData->Barrel->Mesh);
-		if (FirearmData->Grip)
-			if (FirearmData->Grip->Mesh)
-				GripMesh->SetSkeletalMesh(FirearmData->Grip->Mesh);
-		if (FirearmData->Magazine)
-			if (FirearmData->Magazine->Mesh)
-				MagazineMesh->SetSkeletalMesh(FirearmData->Magazine->Mesh);
-		if (FirearmData->Sight)
-			if (FirearmData->Sight->Mesh)
-				SightMesh->SetSkeletalMesh(FirearmData->Sight->Mesh);
-		if (FirearmData->Stock)
-			if (FirearmData->Stock->Mesh)
-				StockMesh->SetSkeletalMesh(FirearmData->Stock->Mesh);
+	if (IsValid(FirearmData)) {
 		skinName = FirearmData->DefaultSkin;
-	}
-	if (Attachment) {
-		UMaterialInterface* newMaterial = Attachment->Skins.FindRef(skinName);
-		if (IsValid(newMaterial) && IsValid(AttachmentMesh)) {
-			AttachmentMesh->SetMaterial(0, newMaterial);
-		}
-	}
-	if (Barrel) {
-		UMaterialInterface* newMaterial = Barrel->Skins.FindRef(skinName);
-		if (IsValid(newMaterial) && IsValid(BarrelMesh)) {
-			BarrelMesh->SetMaterial(0, newMaterial);
-		}
-	}
-	if (Grip) {
-		UMaterialInterface* newMaterial = Grip->Skins.FindRef(skinName);
-		if (IsValid(newMaterial) && IsValid(GripMesh)) {
-			GripMesh->SetMaterial(0, newMaterial);
-		}
-	}
-	if (Magazine) {
-		UMaterialInterface* newMaterial = Magazine->Skins.FindRef(skinName);
-		if (IsValid(newMaterial) && IsValid(MagazineMesh)) {
-			MagazineMesh->SetMaterial(0, newMaterial);
-		}
-	}
-	if (Sight) {
-		UMaterialInterface* newMaterial = Sight->Skins.FindRef(skinName);
-		if (IsValid(newMaterial) && IsValid(SightMesh)) {
-			SightMesh->SetMaterial(0, newMaterial);
-		}
-	}
-	if (Stock) {
-		UMaterialInterface* newMaterial = Stock->Skins.FindRef(skinName);
-		if (IsValid(newMaterial) && IsValid(StockMesh)) {
-			StockMesh->SetMaterial(0, newMaterial);
-		}
+		for (int i = 0; i < EFirearmComponentType::Num; i++) {
+			if (UGunPartDataBase* partData = FirearmData->GetPartData(EFirearmComponentType(i))) {
+				SetPartBaseData(partData);
+				FName partName = *UEnum::GetValueAsString<EFirearmComponentType>(EFirearmComponentType(i));
+				UStaticMeshComponent* partComponent = Cast<UStaticMeshComponent>(AddComponentByClass(UStaticMeshComponent::StaticClass(), true, FTransform(), false));
+				if (IsValid(partComponent)) {
+					partComponent->SetIsReplicated(true);
+					partComponent->ComponentTags.Add(partName);
+					partComponent->SetStaticMesh(partData->Mesh);
+					UMaterialInterface* partMat = partData->Skins.FindRef(skinName);
+					if (IsValid(partMat)) {
+						partComponent->SetMaterial(0, partMat);
+					}
+				}
+			}
+		}		
 	}
 	for (int i = 0; i <= 5; i++) {
 		ComponentSkins.Add(skinName);
@@ -444,7 +366,7 @@ void AModularFirearm::GetLifetimeReplicatedProps(TArray< FLifetimeProperty >& Ou
 	DOREPLIFETIME(AModularFirearm, ComponentSkins);
 	DOREPLIFETIME(AModularFirearm, bBulletLoaded);
 	DOREPLIFETIME(AModularFirearm, CurrentMagazineAmmo);
-	DOREPLIFETIME_CONDITION_NOTIFY(AModularFirearm, Attachment, COND_None, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(AModularFirearm, Attachments, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(AModularFirearm, Barrel, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(AModularFirearm, Grip, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(AModularFirearm, Magazine, COND_None, REPNOTIFY_Always);
@@ -454,75 +376,88 @@ void AModularFirearm::GetLifetimeReplicatedProps(TArray< FLifetimeProperty >& Ou
 #pragma endregion
 #pragma region Customization
 void AModularFirearm::SetComponent(const EFirearmComponentType& componentType, UGunPartDataBase* newComponent) {
-	if (componentType == EFirearmComponentType::Receiver) {
+	if (componentType <= 0 || componentType >= EFirearmComponentType::Num) {
 		return;
 	}
 	if (!HasAuthority() && !GetIsReplicated()) {
 		SetComponentOnServer(componentType, newComponent);
 		return;
 	}
+	UStaticMeshComponent* partMesh = Cast<UStaticMeshComponent>(PartMeshes[componentType]);
+	if (!IsValid(partMesh)) {
+		return;
+	}
+	UGunPartDataBase* partData = GetPartBaseData(componentType);
+	if (GetPartBaseData(componentType)) {
+		GetPartBaseData(componentType) = newComponent;
+	}
+	if (IsValid(partData)) {
+
+	}
+	if (IsValid(newComponent->Mesh)) {
+		partMesh->SetStaticMesh(newComponent->Mesh);
+		if (UMeshComponent* parentComp = PartMeshes[partData->AttachesTo]) {
+			partMesh->AttachToComponent(parentComp, FAttachmentTransformRules::KeepRelativeTransform, partData->AttachSocketName);
+		}
+	}
+	else {
+		partMesh->SetStaticMesh(nullptr);
+	}
+
+
 	switch (componentType) {
 	case EFirearmComponentType::Attachment: {
 		Attachment = Cast<UGunAttachmentData>(newComponent);
 		if (Attachment) {
 			if (Attachment->Mesh) {
-				AttachmentMesh->SetSkeletalMesh(Attachment->Mesh);
-				if (IsValid(Attachment->DefaultAnimInstance)) {
-					AttachmentMesh->SetAnimInstanceClass(Attachment->DefaultAnimInstance);
-				 }
+				AttachmentMesh->SetStaticMesh(Attachment->Mesh);
 				if (IsValid(ReceiverMesh)) {
-					AttachmentMesh->AttachToComponent(ReceiverMesh, FAttachmentTransformRules::KeepRelativeTransform, Attachment->SocketBoneName);
+					AttachmentMesh->AttachToComponent(ReceiverMesh, FAttachmentTransformRules::KeepRelativeTransform, Attachment->AttachSocketName);
 				}
 				break;
 			}
 		}
-		AttachmentMesh->SetSkeletalMesh(nullptr);
+		AttachmentMesh->SetStaticMesh(nullptr);
 		break;
 	}
 	case EFirearmComponentType::Barrel: {
 		Barrel = Cast<UGunBarrelData>(newComponent);
 		if (Barrel) {
 			if (Barrel->Mesh) {
-				BarrelMesh->SetSkeletalMesh(Barrel->Mesh);
-				if (IsValid(Barrel->DefaultAnimInstance)) {
-					BarrelMesh->SetAnimInstanceClass(Barrel->DefaultAnimInstance);
-				}
+				BarrelMesh->SetStaticMesh(Barrel->Mesh);
 				if (IsValid(ReceiverMesh)) {
-					BarrelMesh->AttachToComponent(ReceiverMesh, FAttachmentTransformRules::KeepRelativeTransform, Barrel->SocketBoneName);
+					BarrelMesh->AttachToComponent(ReceiverMesh, FAttachmentTransformRules::KeepRelativeTransform, Barrel->AttachSocketName);
 				}
 				break;
 			}
 		}
-		BarrelMesh->SetSkeletalMesh(nullptr);
+		BarrelMesh->SetStaticMesh(nullptr);
 		break;
 	}
 	case EFirearmComponentType::Grip: {
 		Grip = Cast<UGunGripData>(newComponent);
 		if (Grip) {
 			if (Grip->Mesh) {
-				GripMesh->SetSkeletalMesh(Grip->Mesh);
-				if (IsValid(Grip->DefaultAnimInstance)) {
-					GripMesh->SetAnimInstanceClass(Grip->DefaultAnimInstance);
-				}
+				GripMesh->SetStaticMesh(Grip->Mesh);
 				if (IsValid(ReceiverMesh)) {
-					GripMesh->AttachToComponent(ReceiverMesh, FAttachmentTransformRules::KeepRelativeTransform, Grip->SocketBoneName);
+					GripMesh->AttachToComponent(ReceiverMesh, FAttachmentTransformRules::KeepRelativeTransform, Grip->AttachSocketName);
 				}
 				break;
 			}
 		}
-		GripMesh->SetSkeletalMesh(nullptr);
+		GripMesh->SetStaticMesh(nullptr);
 		break;
 	}
 	case EFirearmComponentType::Magazine: {
 		Magazine = Cast<UGunMagazineData>(newComponent);
 		if (Magazine) {
 			if (Magazine->Mesh) {
-				MagazineMesh->SetSkeletalMesh(Magazine->Mesh);
+				MagazineMesh->SetStaticMesh(Magazine->Mesh);
 				if (IsValid(Magazine->DefaultAnimInstance)) {
 					MagazineMesh->SetAnimInstanceClass(Magazine->DefaultAnimInstance);
 				}
 				if (IsValid(ReceiverMesh)) {
-					MagazineMesh->AttachToComponent(ReceiverMesh, FAttachmentTransformRules::KeepRelativeTransform, Magazine->SocketBoneName);
+					MagazineMesh->AttachToComponent(ReceiverMesh, FAttachmentTransformRules::KeepRelativeTransform, Magazine->AttachSocketName);
 				}
 				break;
 			}
@@ -539,7 +474,7 @@ void AModularFirearm::SetComponent(const EFirearmComponentType& componentType, U
 					SightMesh->SetAnimInstanceClass(Sight->DefaultAnimInstance);
 				}
 				if (IsValid(ReceiverMesh)) {
-					SightMesh->AttachToComponent(ReceiverMesh, FAttachmentTransformRules::KeepRelativeTransform, Sight->SocketBoneName);
+					SightMesh->AttachToComponent(ReceiverMesh, FAttachmentTransformRules::KeepRelativeTransform, Sight->AttachSocketName);
 				}
 				break;
 			}
@@ -556,7 +491,7 @@ void AModularFirearm::SetComponent(const EFirearmComponentType& componentType, U
 					StockMesh->SetAnimInstanceClass(Stock->DefaultAnimInstance);
 				}
 				if (IsValid(ReceiverMesh)) {
-					StockMesh->AttachToComponent(ReceiverMesh, FAttachmentTransformRules::KeepRelativeTransform, Stock->SocketBoneName);
+					StockMesh->AttachToComponent(ReceiverMesh, FAttachmentTransformRules::KeepRelativeTransform, Stock->AttachSocketName);
 				}
 				break;
 			}

@@ -9,13 +9,12 @@
 UENUM(BlueprintType)
 enum EFirearmComponentType : uint8{
 	Receiver	=	0,
-	Attachment	=	1,
-	Barrel		=	2,
-	Grip		=	3,
-	Magazine	=	4,
-	Sight		=	5,
-	Stock		=	6,
-	Num			=	7	UMETA(Hidden)
+	Barrel		=	1,
+	Grip		=	2,
+	Magazine	=	3,
+	Sight		=	4,
+	Stock		=	5,
+	Num			=	6	UMETA(Hidden)
 };
 
 UENUM(BlueprintType)
@@ -104,10 +103,23 @@ public:
 	TObjectPtr<UGunSightData> Sight;
 	UPROPERTY(EditAnywhere, Category = "Components")
 	TObjectPtr<UGunGripData> Grip;
-	UPROPERTY(EditAnywhere, Category = "Components")
-	TObjectPtr<UGunAttachmentData> Attachment;
-	UPROPERTY(EditAnywhere, Category = "Depr")
-	UStreamableRenderAsset* testing;
+	
+	UGunPartDataBase* GetPartData(EFirearmComponentType type) const {
+		switch (type) {
+		case 1:
+			return Barrel;
+		case 2:
+			return Grip;
+		case 3:
+			return Magazine;
+		case 4:
+			return Sight;
+		case 5:
+			return Stock;
+		default:
+			return nullptr;
+		}
+	}
 };
 #pragma endregion
 
@@ -129,6 +141,8 @@ public:
 	TMap<FString, UMaterialInterface*> Skins;
 	UPROPERTY(EditAnywhere, Category = "GunPart", meta = (DisplayPriority = 1))
 	TObjectPtr<UMaterialInterface> Icon;
+	UPROPERTY(EditAnywhere, Category = "GunPart", meta = (DisplayPriority = 1))
+	TEnumAsByte<EFirearmComponentType> AttachesTo;
 	UPROPERTY(EditAnywhere, Category = "GunPart", meta = (DisplayPriority = 1))
 	FName AttachSocketName = "Attachment";
 

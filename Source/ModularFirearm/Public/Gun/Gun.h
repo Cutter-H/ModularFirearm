@@ -170,22 +170,10 @@ private:
 #pragma region Mesh Components
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<USkeletalMeshComponent> ReceiverMesh;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<USkeletalMeshComponent> AttachmentMesh;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<USkeletalMeshComponent> BarrelMesh;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<USkeletalMeshComponent> GripMesh;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<USkeletalMeshComponent> MagazineMesh;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<USkeletalMeshComponent> SightMesh;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<USkeletalMeshComponent> StockMesh;
 #pragma endregion
 #pragma region Component Data
 	UPROPERTY(Replicated, ReplicatedUsing = OnRep_Attachment)
-	TObjectPtr<UGunAttachmentData> Attachment;
+	TObjectPtr<UGunAttachmentData> Attachments;
 	UFUNCTION()
 	void OnRep_Attachment();
 
@@ -213,5 +201,15 @@ private:
 	TObjectPtr<UGunStockData> Stock;
 	UFUNCTION()
 	void OnRep_Stock();
+
+	TArray<UGunPartDataBase*> PartDatas;
+
+	void SetPartBaseData(UGunPartDataBase* part) {
+		if (part->IsA<UGunBarrelData>())	{ Barrel = Cast<UGunBarrelData>(part);		return; }
+		if (part->IsA<UGunGripData>())		{ Grip = Cast<UGunGripData>(part);			return; }
+		if (part->IsA<UGunMagazineData>())	{ Magazine = Cast<UGunMagazineData>(part);	return; }
+		if (part->IsA<UGunSightData>())		{ Sight = Cast<UGunSightData>(part);		return; }
+		if (part->IsA<UGunStockData>())		{ Stock = Cast<UGunStockData>(part);		return; }
+	}
 #pragma endregion
 };
