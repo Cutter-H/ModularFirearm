@@ -2,6 +2,8 @@
 
 #include "ModularFirearm.h"
 
+DEFINE_LOG_CATEGORY(LogModularFirearm);
+
 #define LOCTEXT_NAMESPACE "FModularFirearmModule"
 
 void FModularFirearmModule::StartupModule()

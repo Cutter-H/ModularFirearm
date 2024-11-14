@@ -5,6 +5,8 @@
 #include "CoreMinimal.h"
 #include "Modules/ModuleManager.h"
 
+MODULARFIREARM_API DECLARE_LOG_CATEGORY_EXTERN(LogModularFirearm, Log, All);
+
 class FModularFirearmModule : public IModuleInterface
 {
 public:
