@@ -52,7 +52,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
 	int GetMaxAmmo() const;
 	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
-	float GetBulletSpread() const;
+	float GetBulletSpread(int volleyCount) const;
 	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
 	float GetNoise() const;
 	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
@@ -95,8 +95,8 @@ protected:
 	TEnumAsByte<EFiringMode> FiringMode;
 	UPROPERTY(EditAnywhere, Category = "Firearm|Firing")
 	TEnumAsByte<ETargetingMode> TargetingMode;
-	UPROPERTY(Replicated, meta = (ArraySizeEnum = "EFirearmComponentType"))
-	TArray<FString> ComponentSkins;
+	UPROPERTY(BlueprintReadOnly, Category = "Firearm|Firing")
+	int VolleyBulletCount = 0;
 	UPROPERTY(EditAnywhere, Category = "Firearm|Firing")
 	TEnumAsByte<ECollisionChannel> TargetingChannel = ECollisionChannel::ECC_Visibility;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Firing")
@@ -111,6 +111,11 @@ protected:
 	int BurstAmount = 3;
 	UPROPERTY(EditAnywhere, Category = "Firearm|Reloading")
 	bool bRecycleAmmoOnReload = true;	
+
+	UPROPERTY(Replicated, meta = (ArraySizeEnum = "EFirearmComponentType"))
+	TArray<FString> ComponentSkins;
+	UPROPERTY(EditAnywhere, Category = "Firearm")
+	UCurveTable* table;
 #pragma endregion
 #pragma region Component Defaults
 	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel")
@@ -207,27 +212,27 @@ private:
 #pragma endregion
 #pragma region Component Data
 
-	UPROPERTY(EditDefaultsOnly, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleGun", EditConditionHides), Replicated, ReplicatedUsing = OnRep_Barrel)
+	UPROPERTY(EditDefaultsOnly, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleGun", EditConditionHides, DisplayThumbnail = "false"), Replicated, ReplicatedUsing = OnRep_Barrel)
 	TObjectPtr<UGunBarrelData> Barrel;
 	UFUNCTION()
 	void OnRep_Barrel();
 
-	UPROPERTY(EditDefaultsOnly, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleGun", EditConditionHides), Replicated, ReplicatedUsing = OnRep_Grip)
+	UPROPERTY(EditDefaultsOnly, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleGun", EditConditionHides, DisplayThumbnail = "false"), Replicated, ReplicatedUsing = OnRep_Grip)
 	TObjectPtr<UGunGripData> Grip;
 	UFUNCTION()
 	void OnRep_Grip();
 
-	UPROPERTY(EditDefaultsOnly, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleGun", EditConditionHides), Replicated, ReplicatedUsing = OnRep_Magazine)
+	UPROPERTY(EditDefaultsOnly, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleGun", EditConditionHides, DisplayThumbnail = "false"), Replicated, ReplicatedUsing = OnRep_Magazine)
 	TObjectPtr<UGunMagazineData> Magazine;
 	UFUNCTION()
 	void OnRep_Magazine();
 
-	UPROPERTY(EditDefaultsOnly, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleGun", EditConditionHides), Replicated, ReplicatedUsing = OnRep_Sight)
+	UPROPERTY(EditDefaultsOnly, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleGun", EditConditionHides, DisplayThumbnail = "false"), Replicated, ReplicatedUsing = OnRep_Sight)
 	TObjectPtr<UGunSightData> Sight;
 	UFUNCTION()
 	void OnRep_Sight();
 
-	UPROPERTY(EditDefaultsOnly, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleGun", EditConditionHides), Replicated, ReplicatedUsing = OnRep_Stock)
+	UPROPERTY(EditDefaultsOnly, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleGun", EditConditionHides, DisplayThumbnail = "false"), Replicated, ReplicatedUsing = OnRep_Stock)
 	TObjectPtr<UGunStockData> Stock;
 	UFUNCTION()
 	void OnRep_Stock();

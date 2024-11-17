@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
+#include "DataRegistryId.h"
 #include "ModularFirearmDataAssets.generated.h"
 
 UENUM(BlueprintType)
@@ -31,33 +32,43 @@ enum ETargetingMode{
 	DirectionOfMuzzle,
 	CursorLocation
 };
-
+/*
+ *
+ */
 USTRUCT(BlueprintType)
 struct FScalableFirearmFloat {
 	GENERATED_BODY()
 public:
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Firearm")
-	float Multiplier;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Firearm")
-	UCurveFloat* Curve;
 	FScalableFirearmFloat() :
-		Multiplier(1.f),
-		Curve(nullptr)
+		DefaultValue(1.f),
+		Curve(FCurveTableRowHandle())
 	{}
-	FScalableFirearmFloat(float multiplier) :
-		Multiplier(multiplier),
-		Curve(nullptr) 
+	FScalableFirearmFloat(float defaultValue) :
+		DefaultValue(defaultValue),
+		Curve(FCurveTableRowHandle()) 
 	{}
-	FScalableFirearmFloat(float multiplier, UCurveFloat* curve) :
-		Multiplier(multiplier),
-		Curve(curve) 
-	{}
-	float GetValue(float modifier) const {
-		if (IsValid(Curve)) {
-			return (Curve->GetFloatValue(modifier) * Multiplier);
+	
+	float GetValue() {
+		if (!IsValid(Curve.CurveTable)) {
+			return DefaultValue;
 		}
-		return Multiplier;
+		return Curve.Eval(DefaultValue, RegistryType.GetName().ToString());
 	}
+	float GetValue(float scale) {
+		if (!IsValid(Curve.CurveTable)) {
+			return DefaultValue;
+		}
+		return Curve.Eval(scale, RegistryType.GetName().ToString());
+	}
+/** Default value that is returned if a curve is not present. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ScalableFirearmFloat")
+	float DefaultValue;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ScalableFirearmFloat")
+	FCurveTableRowHandle Curve;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ScalableFirearmFloat")
+	FDataRegistryType RegistryType;
 };
 
 USTRUCT(BlueprintType)

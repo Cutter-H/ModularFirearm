@@ -40,7 +40,6 @@ void AModularFirearm::SpawnBullet_Implementation(const FVector& targetLocation) 
 	}
 	FTransform spawnTransform = GetMuzzleTransform();
 	FVector direction = UKismetMathLibrary::FindLookAtRotation(spawnTransform.GetLocation(), targetLocation).Vector();
-	direction = UKismetMathLibrary::RandomUnitVectorInConeInDegrees(direction, GetBulletSpread());
 	spawnTransform.SetRotation(FQuat::MakeFromRotator(direction.Rotation()));
 	FActorSpawnParameters spawnParams;
 	spawnParams.Owner = this; spawnParams.Instigator = GetInstigator(); spawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -64,6 +63,7 @@ void AModularFirearm::FireWeapon(int burst) {
 	if (!bWantsToFire) {
 		FiringTimer.Invalidate();
 		GetWorld()->GetTimerManager().ClearTimer(FiringTimer);
+		VolleyBulletCount = 0;
 		return;
 	}
 	if (GetCurrentAmmo() > 0) {
@@ -76,6 +76,7 @@ void AModularFirearm::FireWeapon(int burst) {
 						APlayerController* playerCon = GetInstigator()->GetController<APlayerController>();
 						if (APlayerCameraManager* camMan = playerCon->PlayerCameraManager) {
 							FVector camLoc; FRotator camRot; camMan->GetCameraViewPoint(camLoc, camRot);
+							camRot = UKismetMathLibrary::RandomUnitVectorInConeInDegrees(camRot.Vector(), GetBulletSpread(VolleyBulletCount)).Rotation();
 							FCollisionQueryParams hitParams; hitParams.AddIgnoredActor(GetOwner()); hitParams.AddIgnoredActor(this); hitParams.bTraceComplex = true;
 							FHitResult hit;  if (GetWorld()->LineTraceSingleByChannel(hit, camLoc, camLoc + (camRot.Vector() * MAX_flt), TargetingChannel, hitParams)) {
 								targetLocation = hit.ImpactPoint;
@@ -109,6 +110,7 @@ void AModularFirearm::FireWeapon(int burst) {
 			}
 			}
 		}
+		VolleyBulletCount++;
 		SpawnBullet(targetLocation);
 		/* Effects */ {
 			if (GetCamShake()) {
@@ -184,11 +186,11 @@ int AModularFirearm::GetMaxAmmo() const {
 	}
 	return DefaultMaxAmmo.GetValue(GetScalingAttribute());
 }
-float AModularFirearm::GetBulletSpread() const {
+float AModularFirearm::GetBulletSpread(int volleyCount) const {
 	if (IsValid(Barrel)) {
-		return Barrel->bulletSpreadDegree.GetValue(GetScalingAttribute());
+		return Barrel->bulletSpreadDegree.GetValue(volleyCount);
 	}
-
+	return DefaultBulletSpread.GetValue(volleyCount);
 }
 float AModularFirearm::GetNoise() const {
 	if (IsValid(Barrel)) {
@@ -218,7 +220,7 @@ float AModularFirearm::GetCamShakeIntensity() const {
 	if (IsValid(Grip)) {
 		return Grip->CamShakeIntensity.GetValue(GetScalingAttribute());
 	}
-	return 1.0f;
+	return DefaultCamShakeIntensity;
 }
 float AModularFirearm::GetFireRate() const {
 	return RoundsPerSecond.GetValue(GetScalingAttribute());

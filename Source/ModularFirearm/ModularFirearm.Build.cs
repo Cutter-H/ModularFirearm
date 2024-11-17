@@ -26,7 +26,8 @@ public class ModularFirearm : ModuleRules
 			new string[]
 			{
 				"Core",
-				"Niagara"
+				"Niagara",
+                "DataRegistry"
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);
