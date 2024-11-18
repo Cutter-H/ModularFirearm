@@ -103,33 +103,31 @@ protected:
 	bool bPlayMontagesFromExternalSource = false;
 	UPROPERTY(EditDefaultsOnly, Category = "Firearm|Parts")
 	bool bUseSimpleFirearm = false;
-	UPROPERTY(EditAnywhere, Category = "Firearm|Firing")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Firearm|Firing")
 	TEnumAsByte<EFiringMode> FiringMode;
-	UPROPERTY(EditAnywhere, Category = "Firearm|Firing")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Firearm|Firing")
 	TEnumAsByte<ETargetingMode> TargetingMode;
 	UPROPERTY(EditAnywhere, Category = "Firearm|Firing", meta=(EditConditionHides, EditCondition="TargetingMode==ETargetingMode::DirectionOfMuzzle"))
 	FRotator MuzzleOffset;
 	UPROPERTY(BlueprintReadOnly, Category = "Firearm|Firing")
 	int VolleyBulletCount = 0;
-	UPROPERTY(EditAnywhere, Category = "Firearm|Firing")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Firearm|Firing")
 	TEnumAsByte<ECollisionChannel> TargetingChannel = ECollisionChannel::ECC_Visibility;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Firing")
 	FName MuzzleSocketName = "Muzzle";
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Firing")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Firearm|Firing")
 	FScalableFloat MultiShot = FScalableFloat(0);
-	UPROPERTY(EditAnywhere, Category = "Firearm|Firing")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Firearm|Firing")
 	FScalableFloat RoundsPerSecond = FScalableFloat(10);
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Firing|Burst")
-	FScalableFloat BurstSpeed;
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Firing|Burst")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Firearm|Firing|Burst")
+	FScalableFloat BurstSpeed = FScalableFloat(20);
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Firearm|Firing|Burst")
 	int BurstAmount = 3;
-	UPROPERTY(EditAnywhere, Category = "Firearm|Reloading")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Firearm|Reloading")
 	bool bRecycleAmmoOnReload = true;	
 
 	UPROPERTY(Replicated, meta = (ArraySizeEnum = "EFirearmComponentType"))
 	TArray<FString> ComponentSkins;
-	UPROPERTY(EditAnywhere, Category = "Firearm")
-	UCurveTable* table;
 #pragma endregion
 #pragma region Component Defaults
 	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel+Muzzle")
@@ -191,6 +189,8 @@ private:
 	UPROPERTY()
 	FTimerHandle RecoilTimer;
 	UPROPERTY()
+	FTimerHandle BurstTimer;
+	UPROPERTY()
 	bool bWantsToFire = false;
 	UPROPERTY()
 	bool bReloading = false;
@@ -202,7 +202,9 @@ private:
 	UFUNCTION()
 	void OnRep_CurrentAmmo();
 	UFUNCTION()
-	void FireWeapon(int burst = 1);
+	void FireWeapon(bool force = false);
+	UFUNCTION()
+	void BurstFireWeapon(int burst = 1);
 	UFUNCTION()
 	void LoadNewMagazine(bool bFreeFill = false);
 #pragma endregion
@@ -286,7 +288,7 @@ private:
 		return false;
 	}
 #pragma endregion
-
+#pragma region Curve Evaluation Helper Functions
 	float Eval(const FScalableFloat& scalableFloat) const {
 		if(scalableFloat.IsValid()) {
 			return scalableFloat.GetValueAtLevel(GetScalingAttribute());
@@ -303,4 +305,5 @@ private:
 			return scalableFloat.Value;
 		}
 	}
+#pragma endregion
 };

@@ -12,26 +12,32 @@
 #pragma region Firing
 void AModularFirearm::StartFiring() {
 	bWantsToFire = true;
-	if (RecoilTimer.IsValid()) {
+	if (GetWorld()->GetTimerManager().IsTimerActive(RecoilTimer)) {
 		return;
 	}
-	if (FiringMode != EFiringMode::SemiAutomatic) {
-		float delay = 1 / GetFireRate();
-		FTimerDelegate fireDel;
-		int burstAmount = 1;
-		if (FiringMode == EFiringMode::Burst) {
-			burstAmount = GetBurstAmount();
-		}
-		if(FiringMode == EFiringMode::Automatic){
-			fireDel.BindUObject(this, &AModularFirearm::FireWeapon, 1);
+	if (FiringMode == EFiringMode::Automatic) {
+		if (!GetWorld()->GetTimerManager().TimerExists(FiringTimer)) {
+			float delay = 1 / GetFireRate();
+			FTimerDelegate fireDel;
+			fireDel.BindUObject(this, &AModularFirearm::FireWeapon, false);
 			GetWorld()->GetTimerManager().SetTimer(FiringTimer, fireDel, delay, true);
 		}
+		else {
+			GetWorld()->GetTimerManager().UnPauseTimer(FiringTimer);
+		}
 	}
-	
-	FireWeapon();
+	if (FiringMode == EFiringMode::Burst) {
+		BurstFireWeapon(GetBurstAmount());
+	}
+	else {
+		FireWeapon();
+	}
 }
 void AModularFirearm::StopFiring() {
 	bWantsToFire = false;
+	if (GetWorld()->GetTimerManager().TimerExists(FiringTimer)) {
+		GetWorld()->GetTimerManager().PauseTimer(FiringTimer);
+	}
 }
 void AModularFirearm::SpawnBullet_Implementation(const FVector& targetLocation) {
 	TSubclassOf<AActor> bulletClass = GetBulletClass();
@@ -59,10 +65,10 @@ void AModularFirearm::SpawnBullet_Implementation(const FVector& targetLocation) 
 void AModularFirearm::OnRep_CurrentAmmo() {
 	OnCurrentAmmoChange.Broadcast(CurrentMagazineAmmo + bBulletChambered);
 }
-void AModularFirearm::FireWeapon(int burst) {
-	if (!bWantsToFire) {
-		FiringTimer.Invalidate();
-		GetWorld()->GetTimerManager().ClearTimer(FiringTimer);
+void AModularFirearm::FireWeapon(bool force) {
+	if (!force && !bWantsToFire) {
+
+		GetWorld()->GetTimerManager().PauseTimer(FiringTimer);
 		VolleyBulletCount = 0;
 		return;
 	}
@@ -130,14 +136,27 @@ void AModularFirearm::FireWeapon(int burst) {
 				UGameplayStatics::SpawnForceFeedbackAttached(GetHapticFeedback(), ReceiverMesh, FName(), FVector(), FRotator(), EAttachLocation::SnapToTarget, true, false, GetHapticIntensity());
 			}
 		}
-
 		/* Setup Recoiling */ {
 			FTimerDelegate recoilDel;
-
 			float delay = 1 / GetFireRate();
 			GetWorld()->GetTimerManager().SetTimer(RecoilTimer, recoilDel, delay, false);
 		}
 
+		
+	}
+}
+void AModularFirearm::BurstFireWeapon(int burst) {
+	if (burst <= 0) {
+		return;
+	}
+	FireWeapon(true);
+	int newBurst = burst - 1;
+	if (newBurst > 0) {
+		FTimerHandle burstHandle;
+		FTimerDelegate burstDel;
+		burstDel.BindUObject(this, &AModularFirearm::BurstFireWeapon, newBurst);
+		float burstDelay = (1 / Eval(BurstSpeed));
+		GetWorld()->GetTimerManager().SetTimer(burstHandle, burstDel, burstDelay, false);
 	}
 }
 #pragma endregion
