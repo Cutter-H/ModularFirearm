@@ -11,6 +11,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAmmoChangeSignature, int, newAmmo
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBulletSpawnSignature, AActor*, newBullet);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPlayAnimationSignature, UAnimMontage*, montage);
 
+class UNiagaraSystem;
+
 UCLASS(PrioritizeCategories = ("Firearm"))
 class MODULARFIREARM_API AModularFirearm : public AActor
 {
@@ -82,6 +84,16 @@ public:
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Firearm|Getters")
 	float GetScalingAttribute() const;
 	float GetScalingAttribute_Implementation() const { return 1.f; }
+
+	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
+	UNiagaraSystem* GetMuzzleFlash() const;
+	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
+	USoundBase* GetFiringSound() const;
+	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
+	UAnimMontage* GetReloadMontage();
+
+
+
 #pragma endregion
 protected:
 #pragma region Firearm Variables
@@ -118,9 +130,7 @@ protected:
 	UCurveTable* table;
 #pragma endregion
 #pragma region Component Defaults
-	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel")
-	FScalableFirearmFloat DefaultBulletSpread = FScalableFirearmFloat(0);
-	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel")
+	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel+Muzzle")
 	FScalableFirearmFloat DefaultNoise = FScalableFirearmFloat(0);
 	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Grip")
 	TObjectPtr<UForceFeedbackEffect> DefaultFiringHaptic;
@@ -130,22 +140,32 @@ protected:
 	FScalableFirearmFloat DefaultMaxAmmo = FScalableFirearmFloat(30);
 	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Magazine")
 	TSubclassOf<AActor> DefaultBulletClass;
+	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel+Muzzle")
+	UAnimMontage* DefaultReloadMontage;
 	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Stock")
 	TSubclassOf<UCameraShakeBase> DefaultCamShake;
 	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Stock")
-	float DefaultCamShakeIntensity = 1.f;
-	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel")
-	TObjectPtr<UCurveFloat> BulletSpread;
+	float DefaultCamShakeIntensity = 1.f;	
+	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel+Muzzle")
+	FScalableFirearmFloat DefaultBulletSpreadForVolley;
+	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel+Muzzle")
+	FScalableFirearmFloat DefaultSpreadMultiplier = FScalableFirearmFloat(1);
+	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel+Muzzle")
+	USoundBase* DefaultFiringSound;
+	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel+Muzzle")
+	UNiagaraSystem* DefaultMuzzleFlash;
+
 #pragma endregion
 #pragma region Cosmetics
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Cosmetics")
 	FString DefaultSkin = "Normal";
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Cosmetics")
-	TMap<FString, UMaterialInterface*> Skins;
+	TMap<FString, UMaterialInterface*> ReceiverSkins;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Cosmetics")
 	TObjectPtr<UAnimMontage> FiringMontage;
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Cosmetics")
-	TObjectPtr<UAnimMontage> DefaultReloadMontage;
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Firearm|Cosmetics")
+	UAnimMontage* GetFiringMontage() const;
+	UAnimMontage* GetFiringMontage_Implementation() const { return FiringMontage; }
 
 	UFUNCTION(NetMulticast, Reliable)
 	void PlayReplicatedMontage(UAnimMontage* montage, const FString& info = "");
@@ -195,22 +215,29 @@ private:
 	void UpdateSkin(const EFirearmComponentType& componentType, const FString& skinName);
 #pragma endregion
 #pragma region Mesh Components
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<USkeletalMeshComponent> ReceiverMesh;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly,  Category = "Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UStaticMeshComponent> BarrelMesh;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly,  Category = "Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UStaticMeshComponent> GripMesh;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly,  Category = "Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UStaticMeshComponent> MagazineMesh;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly,  Category = "Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UStaticMeshComponent> SightMesh;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly,  Category = "Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UStaticMeshComponent> StockMesh;
-
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly,  Category = "Components", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UStaticMeshComponent> MuzzleMesh;
+	UPROPERTY()
 	TArray<UMeshComponent*> PartMeshes;
 #pragma endregion
 #pragma region Component Data
+
+	UPROPERTY(EditDefaultsOnly, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleGun", EditConditionHides, DisplayThumbnail = "false"), Replicated, ReplicatedUsing = OnRep_Muzzle)
+	TObjectPtr<UGunBarrelData> Muzzle;
+	UFUNCTION()
+	void OnRep_Muzzle();
 
 	UPROPERTY(EditDefaultsOnly, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleGun", EditConditionHides, DisplayThumbnail = "false"), Replicated, ReplicatedUsing = OnRep_Barrel)
 	TObjectPtr<UGunBarrelData> Barrel;
@@ -243,10 +270,12 @@ private:
 		case 3: return Magazine;
 		case 4: return Sight;
 		case 5: return Stock;
+		case 6: return Muzzle;
 		default: return nullptr;
 		}
 	}
 	bool SetPartBaseData(UGunPartDataBase* part) {
+		if (part->IsA<UGunMuzzleData>())	{ Muzzle = Cast<UGunMuzzleData>(part);			return true; }
 		if (part->IsA<UGunBarrelData>())	{ Barrel = Cast<UGunBarrelData>(part);			return true; }
 		if (part->IsA<UGunGripData>())		{ Grip = Cast<UGunGripData>(part);				return true; }
 		if (part->IsA<UGunMagazineData>())	{ Magazine = Cast<UGunMagazineData>(part);		return true; }

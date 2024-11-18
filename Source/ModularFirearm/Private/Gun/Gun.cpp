@@ -188,11 +188,14 @@ int AModularFirearm::GetMaxAmmo() const {
 }
 float AModularFirearm::GetBulletSpread(int volleyCount) const {
 	if (IsValid(Barrel)) {
-		return Barrel->bulletSpreadDegree.GetValue(volleyCount);
+		return Barrel->GetSpread(volleyCount, GetScalingAttribute());
 	}
-	return DefaultBulletSpread.GetValue(volleyCount);
+	return DefaultBulletSpreadForVolley.GetValue(volleyCount) * DefaultSpreadMultiplier.GetValue(GetScalingAttribute());
 }
 float AModularFirearm::GetNoise() const {
+	if (IsValid(Muzzle)) {
+		return Muzzle->NoiseAmount.GetValue(GetScalingAttribute());
+	}
 	if (IsValid(Barrel)) {
 		return Barrel->NoiseAmount.GetValue(GetScalingAttribute());
 	}
@@ -232,10 +235,13 @@ int AModularFirearm::GetBurstAmount() const {
 	return BurstAmount;
 }
 FTransform AModularFirearm::GetMuzzleTransform() const {
-	if (IsValid(BarrelMesh)) {
+	if (IsValid(MuzzleMesh) && MuzzleMesh->DoesSocketExist(MuzzleSocketName)) {
+		return MuzzleMesh->GetSocketTransform(MuzzleSocketName);
+	}
+	if (IsValid(BarrelMesh) && MuzzleMesh->DoesSocketExist(MuzzleSocketName)) {
 		return BarrelMesh->GetSocketTransform(MuzzleSocketName);
 	}
-	if (IsValid(ReceiverMesh)) {
+	if (IsValid(ReceiverMesh) && MuzzleMesh->DoesSocketExist(MuzzleSocketName)) {
 		return ReceiverMesh->GetSocketTransform(MuzzleSocketName);
 	}
 	return GetActorTransform();
@@ -255,6 +261,30 @@ float AModularFirearm::GetReloadSpeedModifier() const {
 		return Magazine->ReloadSpeedMultiplier.GetValue(GetScalingAttribute());
 	}
 	return 1.0f;
+}
+UNiagaraSystem* AModularFirearm::GetMuzzleFlash() const {
+	if (IsValid(Muzzle)) {
+		return Muzzle->MuzzleFlash;
+	}
+	if (IsValid(Barrel)) {
+		return Barrel->MuzzleFlash;
+	}
+	return DefaultMuzzleFlash;
+}
+USoundBase* AModularFirearm::GetFiringSound() const {
+	if (IsValid(Muzzle)) {
+		return Muzzle->GetFiringSound();
+	}
+	if (IsValid(Barrel)) {
+		return Barrel->GetFiringSound();
+	}
+	return DefaultFiringSound;
+}
+UAnimMontage* AModularFirearm::GetReloadMontage() {
+	if (IsValid(Magazine)) {
+		return Magazine->GetReloadMontage();
+	}
+	return DefaultReloadMontage;;
 }
 int AModularFirearm::GetReserveAmmo_Implementation() const {
 	return GetMaxAmmo();
@@ -346,47 +376,60 @@ void AModularFirearm::OnConstruction(const FTransform& Transform) {
 				StockMesh->AttachToComponent(ReceiverMesh, FAttachmentTransformRules::SnapToTargetIncludingScale, Stock->AttachSocketName);
 			}
 			StockMesh->SetIsReplicated(true);
+
+			MuzzleMesh = Cast<UStaticMeshComponent>(AddComponentByClass(UStaticMeshComponent::StaticClass(), true, FTransform(), false));
+			PartMeshes.Add(MuzzleMesh);
+			if (IsValid(Muzzle)) {
+				MuzzleMesh->AttachToComponent(BarrelMesh, FAttachmentTransformRules::SnapToTargetIncludingScale, Muzzle->AttachSocketName);
+			}
+			StockMesh->SetIsReplicated(true);
 		}
 		/* Generate the components */ {
 			if (IsValid(Barrel) && IsValid(Barrel->Mesh)) {
 				BarrelMesh->SetStaticMesh(Barrel->Mesh);
-				UMaterialInterface* newMaterial = Barrel->Skins.FindRef(DefaultSkin);
+				UMaterialInterface* newMaterial = Barrel->ReceiverSkins.FindRef(DefaultSkin);
 				if (IsValid(newMaterial) && IsValid(BarrelMesh)) {
 					BarrelMesh->SetMaterial(0, newMaterial);
 				}
 			}
 			if (IsValid(Grip) && IsValid(Grip->Mesh)) {
 				GripMesh->SetStaticMesh(Grip->Mesh);
-				UMaterialInterface* newMaterial = Grip->Skins.FindRef(DefaultSkin);
+				UMaterialInterface* newMaterial = Grip->ReceiverSkins.FindRef(DefaultSkin);
 				if (IsValid(newMaterial) && IsValid(GripMesh)) {
 					GripMesh->SetMaterial(0, newMaterial);
 				}
 			}
 			if (IsValid(Magazine) && IsValid(Magazine->Mesh)) {
 				MagazineMesh->SetStaticMesh(Magazine->Mesh);
-				UMaterialInterface* newMaterial = Magazine->Skins.FindRef(DefaultSkin);
+				UMaterialInterface* newMaterial = Magazine->ReceiverSkins.FindRef(DefaultSkin);
 				if (IsValid(newMaterial) && IsValid(MagazineMesh)) {
 					MagazineMesh->SetMaterial(0, newMaterial);
 				}
 			}
 			if (IsValid(Sight) && IsValid(Sight->Mesh)) {
 				SightMesh->SetStaticMesh(Sight->Mesh);
-				UMaterialInterface* newMaterial = Sight->Skins.FindRef(DefaultSkin);
+				UMaterialInterface* newMaterial = Sight->ReceiverSkins.FindRef(DefaultSkin);
 				if (IsValid(newMaterial) && IsValid(SightMesh)) {
 					SightMesh->SetMaterial(0, newMaterial);
 				}
 			}
 			if (IsValid(Stock) && IsValid(Stock->Mesh)) {
 				StockMesh->SetStaticMesh(Stock->Mesh);
-				UMaterialInterface* newMaterial = Stock->Skins.FindRef(DefaultSkin);
+				UMaterialInterface* newMaterial = Stock->ReceiverSkins.FindRef(DefaultSkin);
 				if (IsValid(newMaterial) && IsValid(StockMesh)) {
 					StockMesh->SetMaterial(0, newMaterial);
 				}
 			}
-
+			if (IsValid(Muzzle) && IsValid(Muzzle->Mesh)) {
+				MuzzleMesh->SetStaticMesh(Muzzle->Mesh);
+				UMaterialInterface* newMaterial = Muzzle->ReceiverSkins.FindRef(DefaultSkin);
+				if (IsValid(newMaterial) && IsValid(MuzzleMesh)) {
+					MuzzleMesh->SetMaterial(0, newMaterial);
+				}
+			}
 		}
 	}
-	for (int i = 0; i <= 5; i++) {
+	for (int i = 0; i <= 6; i++) {
 		ComponentSkins.Add(DefaultSkin);
 	}
 
@@ -408,6 +451,7 @@ void AModularFirearm::GetLifetimeReplicatedProps(TArray< FLifetimeProperty >& Ou
 	DOREPLIFETIME(AModularFirearm, ComponentSkins);
 	DOREPLIFETIME(AModularFirearm, bBulletChambered);
 	DOREPLIFETIME(AModularFirearm, CurrentMagazineAmmo);
+	DOREPLIFETIME_CONDITION_NOTIFY(AModularFirearm, Muzzle, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(AModularFirearm, Barrel, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(AModularFirearm, Grip, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(AModularFirearm, Magazine, COND_None, REPNOTIFY_Always);
@@ -474,7 +518,7 @@ void AModularFirearm::UpdateSkin(const EFirearmComponentType& componentType, con
 	}
 	UMaterialInterface* newSkin;
 	if (componentType == EFirearmComponentType::Receiver) {
-		newSkin = Skins.FindRef(skinName);
+		newSkin = ReceiverSkins.FindRef(skinName);
 	}
 	else {
 		UGunPartDataBase* partData = GetPartData(componentType);
@@ -482,7 +526,7 @@ void AModularFirearm::UpdateSkin(const EFirearmComponentType& componentType, con
 			UE_LOG(LogModularFirearm, Warning, TEXT("Attempted to update the skin of a gun part that doesn't have data."));
 			return;
 		}
-		newSkin = partData->Skins.FindRef(skinName);
+		newSkin = partData->ReceiverSkins.FindRef(skinName);
 	}
 	if (!IsValid(newSkin)) {
 		FString meshName; modifiedMesh->GetName(meshName);
@@ -503,14 +547,27 @@ void AModularFirearm::SetComponentSkinOnServer_Implementation(const EFirearmComp
 }
 #pragma endregion
 #pragma region Component OnRep functions
+void AModularFirearm::OnRep_Muzzle() {
+	if (IsValid(Muzzle) && IsValid(MuzzleMesh)) {
+		if (UMaterialInterface* partMat = Muzzle->ReceiverSkins.FindRef(ComponentSkins[EFirearmComponentType::Muzzle])) {
+			MuzzleMesh->SetMaterial(0, partMat);
+		}
+		else {
+			TArray<UMaterialInterface*> mats;  Muzzle->ReceiverSkins.GenerateValueArray(mats);
+			if (mats.Num() > 0) {
+				MuzzleMesh->SetMaterial(0, mats[0]);
+			}
+		}
+	}
+}
 void AModularFirearm::OnRep_Barrel()
 {
 	if(IsValid(Barrel) && IsValid(BarrelMesh)) {
-		if (UMaterialInterface* partMat = Barrel->Skins.FindRef(ComponentSkins[EFirearmComponentType::Barrel])) {
+		if (UMaterialInterface* partMat = Barrel->ReceiverSkins.FindRef(ComponentSkins[EFirearmComponentType::Barrel])) {
 			BarrelMesh->SetMaterial(0, partMat);
 		}
 		else {
-			TArray<UMaterialInterface*> mats;  Barrel->Skins.GenerateValueArray(mats);
+			TArray<UMaterialInterface*> mats;  Barrel->ReceiverSkins.GenerateValueArray(mats);
 			if (mats.Num() > 0) {
 				BarrelMesh->SetMaterial(0, mats[0]);
 			}
@@ -520,11 +577,11 @@ void AModularFirearm::OnRep_Barrel()
 void AModularFirearm::OnRep_Grip()
 {
 	if(IsValid(Grip) && IsValid(GripMesh)) {
-		if (UMaterialInterface* partMat = Grip->Skins.FindRef(ComponentSkins[EFirearmComponentType::Grip])) {
+		if (UMaterialInterface* partMat = Grip->ReceiverSkins.FindRef(ComponentSkins[EFirearmComponentType::Grip])) {
 			GripMesh->SetMaterial(0, partMat);
 		}
 		else {
-			TArray<UMaterialInterface*> mats;  Grip->Skins.GenerateValueArray(mats);
+			TArray<UMaterialInterface*> mats;  Grip->ReceiverSkins.GenerateValueArray(mats);
 			if (mats.Num() > 0) {
 				GripMesh->SetMaterial(0, mats[0]);
 			}
@@ -534,11 +591,11 @@ void AModularFirearm::OnRep_Grip()
 void AModularFirearm::OnRep_Magazine()
 {
 	if(IsValid(Magazine) && IsValid(MagazineMesh)) {
-		if (UMaterialInterface* partMat = Magazine->Skins.FindRef(ComponentSkins[EFirearmComponentType::Magazine])) {
+		if (UMaterialInterface* partMat = Magazine->ReceiverSkins.FindRef(ComponentSkins[EFirearmComponentType::Magazine])) {
 			MagazineMesh->SetMaterial(0, partMat);
 		}
 		else {
-			TArray<UMaterialInterface*> mats;  Magazine->Skins.GenerateValueArray(mats);
+			TArray<UMaterialInterface*> mats;  Magazine->ReceiverSkins.GenerateValueArray(mats);
 			if (mats.Num() > 0) {
 				MagazineMesh->SetMaterial(0, mats[0]);
 			}
@@ -548,11 +605,11 @@ void AModularFirearm::OnRep_Magazine()
 void AModularFirearm::OnRep_Sight()
 {
 	if (IsValid(Sight) && IsValid(SightMesh)) {
-		if (UMaterialInterface* partMat = Sight->Skins.FindRef(ComponentSkins[EFirearmComponentType::Sight])) {
+		if (UMaterialInterface* partMat = Sight->ReceiverSkins.FindRef(ComponentSkins[EFirearmComponentType::Sight])) {
 			SightMesh->SetMaterial(0, partMat);
 		}
 		else {
-			TArray<UMaterialInterface*> mats;  Sight->Skins.GenerateValueArray(mats);
+			TArray<UMaterialInterface*> mats;  Sight->ReceiverSkins.GenerateValueArray(mats);
 			if (mats.Num() > 0) {
 				SightMesh->SetMaterial(0, mats[0]);
 			}
@@ -562,11 +619,11 @@ void AModularFirearm::OnRep_Sight()
 void AModularFirearm::OnRep_Stock()
 {
 	if (IsValid(Stock) && IsValid(StockMesh)) {
-		if (UMaterialInterface* partMat = Stock->Skins.FindRef(ComponentSkins[EFirearmComponentType::Stock])) {
+		if (UMaterialInterface* partMat = Stock->ReceiverSkins.FindRef(ComponentSkins[EFirearmComponentType::Stock])) {
 			StockMesh->SetMaterial(0, partMat);
 		}
 		else {
-			TArray<UMaterialInterface*> mats;  Stock->Skins.GenerateValueArray(mats);
+			TArray<UMaterialInterface*> mats;  Stock->ReceiverSkins.GenerateValueArray(mats);
 			if (mats.Num() > 0) {
 				StockMesh->SetMaterial(0, mats[0]);
 			}

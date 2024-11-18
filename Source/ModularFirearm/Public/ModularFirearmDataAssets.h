@@ -48,13 +48,13 @@ public:
 		Curve(FCurveTableRowHandle()) 
 	{}
 	
-	float GetValue() {
+	float GetValue() const {
 		if (!IsValid(Curve.CurveTable)) {
 			return DefaultValue;
 		}
 		return Curve.Eval(DefaultValue, RegistryType.GetName().ToString());
 	}
-	float GetValue(float scale) {
+	float GetValue(float scale) const {
 		if (!IsValid(Curve.CurveTable)) {
 			return DefaultValue;
 		}
@@ -109,25 +109,12 @@ public:
 	UPROPERTY(EditAnywhere, Category = "GunPart", meta = (DisplayPriority = 1))
 	TObjectPtr<UStaticMesh> Mesh;
 	UPROPERTY(EditAnywhere, Category = "GunPart", meta = (DisplayPriority = 1))
-	TMap<FString, UMaterialInterface*> Skins;
+	TMap<FString, UMaterialInterface*> ReceiverSkins;
 	UPROPERTY(EditAnywhere, Category = "GunPart", meta = (DisplayPriority = 1))
 	FName AttachSocketName = "Attachment";
 
 };
 
-#pragma endregion
-#pragma region Attachment
-UCLASS(meta = (PrioritizeCategories = "Gun Part"))
-class MODULARFIREARM_API UGunAttachmentData : public UGunPartDataBase
-{
-	GENERATED_BODY()
-public:
-	// This is basically FlashLights and lasers.
-	UPROPERTY(EditAnywhere, Category = "Attachment", meta = (DisplayPriority = 2))
-	FScalableFirearmFloat LightIntensity;
-	UPROPERTY(EditAnywhere, Category = "Attachment", meta = (DisplayPriority = 2))
-	class UNiagaraSystem* NiagaraBeamSystem;
-};
 #pragma endregion
 #pragma region Barrel
 UCLASS(meta = (PrioritizeCategories = "Gun Part"))
@@ -139,8 +126,11 @@ public:
 		AttachSocketName = "Barrel";
 	}
 	UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
-	FScalableFirearmFloat bulletSpreadDegree = FScalableFirearmFloat(0);
+	FScalableFirearmFloat bulletVolleySpread = FScalableFirearmFloat(0);
+	UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
+	FScalableFirearmFloat spreadMultiplier = FScalableFirearmFloat(1.0);
 
+	/* Should be added to the bullet. */ /*
 	// When Damage falloff begins to take affect. (If this is below 0 then there is no falloff.)
 	UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
 	FScalableFirearmFloat falloffBeginDistance = FScalableFirearmFloat(-1.f);
@@ -150,6 +140,7 @@ public:
 	// Curve used to alter damage for falloff. 0 = BeginDistance, 1 = BeginDistance + Duration
 	UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
 	UCurveFloat* falloffCurve;
+	*/
 	// Niagara system when firing.
 	UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
 	class UNiagaraSystem* MuzzleFlash;
@@ -159,11 +150,27 @@ public:
 	// For AI Noise
 	UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
 	FScalableFirearmFloat NoiseAmount = FScalableFirearmFloat(0.f);
-
-	UFUNCTION(BlueprintNativeEvent, Category = "Barrel")
+	/* Created function so randomization or logic can be added when grabbing sound. */
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Firearm Data")
 	USoundBase* GetFiringSound() const;
 	USoundBase* GetFiringSound_Implementation() const { return DefaultFiringSound; }
 
+	UFUNCTION(BlueprintCallable, Category = "FirearmData")
+	float GetSpread(float volleyCount, float scale) const {
+		return bulletVolleySpread.GetValue(volleyCount) * spreadMultiplier.GetValue(scale);
+	}
+
+};
+#pragma endregion
+#pragma region Muzzle
+/* This class is effectively empty. This was created for a clear distinction of Barrel and Muzzle. Muzzle variables override the equipped Barrel variables. */
+UCLASS(meta = (PrioritizeCategories = "Gun Part"))
+class MODULARFIREARM_API UGunMuzzleData : public UGunBarrelData {
+	GENERATED_BODY()
+public:
+	UGunMuzzleData() {
+		AttachSocketName = "Muzzle";
+	}
 };
 #pragma endregion
 #pragma region Grip
@@ -205,11 +212,10 @@ public:
 	FScalableFirearmFloat ReloadSpeedMultiplier;
 	UPROPERTY(EditAnywhere, Category = "Magazine", meta = (DisplayPriority = 2))
 	UAnimMontage* DefaultReloadMontage;
-	
-	UFUNCTION(BlueprintNativeEvent, Category = "Magazine")
+	/* Created function so randomization or logic can be added when grabbing montage. */
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Firearm Data")
 	UAnimMontage* GetReloadMontage() const;
-	UAnimMontage* GetReloadMontage_Implementation() const {
-		return DefaultReloadMontage; }
+	UAnimMontage* GetReloadMontage_Implementation() const { return DefaultReloadMontage; }
 
 
 };

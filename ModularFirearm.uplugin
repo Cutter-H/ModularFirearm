@@ -3,7 +3,7 @@
 	"Version": 1,
 	"VersionName": "1.0",
 	"FriendlyName": "ModularFirearm",
-	"Description": "Gun Actor that uses modular ActorComponents.",
+	"Description": "Gun Actor that uses modular Data Assets.",
 	"Category": "Other",
 	"CreatedBy": "LyCH",
 	"CreatedByURL": "",
@@ -25,6 +25,10 @@
 		{
 			"Name": "Niagara",
 			"Enabled": true
+		},
+		{
+			"Name": "DataRegistry",
+			"Enabled":true
 		}
 	]
 }
