@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
-#include "DataRegistryId.h"
+#include "ScalableFloat.h"
 #include "ModularFirearmDataAssets.generated.h"
 
 UENUM(BlueprintType)
@@ -35,69 +35,6 @@ enum ETargetingMode{
 /*
  *
  */
-USTRUCT(BlueprintType)
-struct FScalableFirearmFloat {
-	GENERATED_BODY()
-public:
-	FScalableFirearmFloat() :
-		DefaultValue(1.f),
-		Curve(FCurveTableRowHandle())
-	{}
-	FScalableFirearmFloat(float defaultValue) :
-		DefaultValue(defaultValue),
-		Curve(FCurveTableRowHandle()) 
-	{}
-	
-	float GetValue() const {
-		if (!IsValid(Curve.CurveTable)) {
-			return DefaultValue;
-		}
-		return Curve.Eval(DefaultValue, RegistryType.GetName().ToString());
-	}
-	float GetValue(float scale) const {
-		if (!IsValid(Curve.CurveTable)) {
-			return DefaultValue;
-		}
-		return Curve.Eval(scale, RegistryType.GetName().ToString());
-	}
-/** Default value that is returned if a curve is not present. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ScalableFirearmFloat")
-	float DefaultValue;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ScalableFirearmFloat")
-	FCurveTableRowHandle Curve;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ScalableFirearmFloat")
-	FDataRegistryType RegistryType;
-};
-
-USTRUCT(BlueprintType)
-struct FScalableFirearmSpread{
-	GENERATED_BODY()
-public:
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Firearm")
-	float Multiplier;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Firearm")
-	UCurveFloat* Curve;
-	FScalableFirearmSpread() :
-		Multiplier(1.f),
-		Curve(nullptr) {
-	}
-	FScalableFirearmSpread(float multiplier) :
-		Multiplier(multiplier),
-		Curve(nullptr) {
-	}
-	FScalableFirearmSpread(float multiplier, UCurveFloat* curve) :
-		Multiplier(multiplier),
-		Curve(curve) {
-	}
-	float GetValue(float modifier, float ) const {
-		if (IsValid(Curve)) {
-			return (Curve->GetFloatValue(modifier) * Multiplier);
-		}
-		return Multiplier;
-	}
-};
 
 
 #pragma region Component Base
@@ -126,18 +63,18 @@ public:
 		AttachSocketName = "Barrel";
 	}
 	UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
-	FScalableFirearmFloat bulletVolleySpread = FScalableFirearmFloat(0);
+	FScalableFloat bulletVolleySpread = FScalableFloat(0);
 	UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
-	FScalableFirearmFloat spreadMultiplier = FScalableFirearmFloat(1.0);
+	FScalableFloat spreadMultiplier= FScalableFloat(1);
 
 	/* Should be added to the bullet. */ /*
 	// When Damage falloff begins to take affect. (If this is below 0 then there is no falloff.)
 	UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
-	FScalableFirearmFloat falloffBeginDistance = FScalableFirearmFloat(-1.f);
+	FScalableFloat falloffBeginDistance = FScalableFloat(-1.f);
 	// Distance where the falloff ends. (End distance is BeginDistance + Duration)
 	UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
-	FScalableFirearmFloat falloffDuration = FScalableFirearmFloat(0.f);
-	// Curve used to alter damage for falloff. 0 = BeginDistance, 1 = BeginDistance + Duration
+	FScalableFloat falloffDuration = FScalableFloat(0.f);
+	// CurveTable used to alter damage for falloff. 0 = BeginDistance, 1 = BeginDistance + Duration
 	UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
 	UCurveFloat* falloffCurve;
 	*/
@@ -149,7 +86,7 @@ public:
 	USoundBase* DefaultFiringSound;
 	// For AI Noise
 	UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
-	FScalableFirearmFloat NoiseAmount = FScalableFirearmFloat(0.f);
+	FScalableFloat NoiseAmount = FScalableFloat(1);
 	/* Created function so randomization or logic can be added when grabbing sound. */
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Firearm Data")
 	USoundBase* GetFiringSound() const;
@@ -157,7 +94,7 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "FirearmData")
 	float GetSpread(float volleyCount, float scale) const {
-		return bulletVolleySpread.GetValue(volleyCount) * spreadMultiplier.GetValue(scale);
+		return bulletVolleySpread.GetValueAtLevel(volleyCount) * spreadMultiplier.GetValueAtLevel(scale);
 	}
 
 };
@@ -184,15 +121,15 @@ public:
 	}
 	// Multiplies the default cam shake. The base value is found in the stock component.
 	UPROPERTY(EditAnywhere, Category = "Grip", meta = (DisplayPriority = 2))
-	FScalableFirearmFloat recoilMultiplier;
+	FScalableFloat recoilMultiplier;
 	// The base haptic feedback class
 	UPROPERTY(EditAnywhere, Category = "Grip", meta = (DisplayPriority = 2))
 	TObjectPtr<UForceFeedbackEffect> HapticFeedback;
 	// Changes the intensity of the haptic feedback based on firearm level.
 	UPROPERTY(EditAnywhere, Category = "Grip", meta = (DisplayPriority = 2))
-	FScalableFirearmFloat HapticIntensity;
+	FScalableFloat HapticIntensity;
 	UPROPERTY(EditAnywhere, Category = "Grip", meta = (DisplayPriority = 2))
-	FScalableFirearmFloat CamShakeIntensity;
+	FScalableFloat CamShakeIntensity;
 };
 #pragma endregion
 #pragma region Magazine
@@ -207,9 +144,9 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Magazine", meta = (DisplayPriority = 2))
 	TArray<TSubclassOf<AActor>> BulletClasses;
 	UPROPERTY(EditAnywhere, Category = "Magazine", meta = (DisplayPriority = 2))
-	FScalableFirearmFloat MaxAmmo;
+	FScalableFloat MaxAmmo = FScalableFloat(30);
 	UPROPERTY(EditAnywhere, Category = "Magazine", meta = (DisplayPriority = 2))
-	FScalableFirearmFloat ReloadSpeedMultiplier;
+	FScalableFloat ReloadSpeedMultiplier = FScalableFloat(1);
 	UPROPERTY(EditAnywhere, Category = "Magazine", meta = (DisplayPriority = 2))
 	UAnimMontage* DefaultReloadMontage;
 	/* Created function so randomization or logic can be added when grabbing montage. */
@@ -230,11 +167,9 @@ public:
 		AttachSocketName = "Sight";
 	}
 	UPROPERTY(EditAnywhere, Category = "Sight", meta = (DisplayPriority = 2))
-	FScalableFirearmFloat FOVZoomMultiplier;
+	FScalableFloat FOVZoomMultiplier;
 	UPROPERTY(EditAnywhere, Category = "Sight", meta = (DisplayPriority = 2))
-	FScalableFirearmFloat FOVZoomAmount;
-	UPROPERTY(EditAnywhere, Category = "Sight", meta = (DisplayPriority = 2))
-	FVector CameraAimOffset = FVector(0, 0, 0);
+	FScalableFloat FOVZoomAmount;
 };
 #pragma endregion
 #pragma region Stock
@@ -247,14 +182,13 @@ public:
 		AttachSocketName = "Stock";
 	}
 	UPROPERTY(EditAnywhere, Category = "Stock", meta = (DisplayPriority = 2))
-	FScalableFirearmFloat recoilMultiplierDuration;
-	UPROPERTY(EditAnywhere, Category = "Stock", meta = (DisplayPriority = 2))
 	UCurveLinearColor* BaseRecoil;
 	UPROPERTY(EditAnywhere, Category = "Stock", meta = (DisplayPriority = 2))
-	FScalableFirearmFloat RecoilMultiplier;
+	FScalableFloat RecoilMultiplier = FScalableFloat(1);
 	UPROPERTY(EditAnywhere, Category = "Stock", meta = (DisplayPriority = 2))
-	FScalableFirearmFloat SwapMultiplier;
+	FScalableFloat SwapMultiplier = FScalableFloat(1);
 	UPROPERTY(EditAnywhere, Category = "Stock", meta = (DisplayPriority = 2))
 	TSubclassOf<UCameraShakeBase> CamShake;
 };
 #pragma endregion
+

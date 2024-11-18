@@ -39,7 +39,7 @@ public:
 	void SetComponentSkin(const EFirearmComponentType& componentType, const FString& skinName);
 
 	UFUNCTION(BlueprintCallable, Category = "Firearm|Firing")
-	void BeginFiring();
+	void StartFiring();
 	UFUNCTION(BlueprintCallable, Category = "Firearm|Firing")
 	void StopFiring();
 
@@ -107,6 +107,8 @@ protected:
 	TEnumAsByte<EFiringMode> FiringMode;
 	UPROPERTY(EditAnywhere, Category = "Firearm|Firing")
 	TEnumAsByte<ETargetingMode> TargetingMode;
+	UPROPERTY(EditAnywhere, Category = "Firearm|Firing", meta=(EditConditionHides, EditCondition="TargetingMode==ETargetingMode::DirectionOfMuzzle"))
+	FRotator MuzzleOffset;
 	UPROPERTY(BlueprintReadOnly, Category = "Firearm|Firing")
 	int VolleyBulletCount = 0;
 	UPROPERTY(EditAnywhere, Category = "Firearm|Firing")
@@ -114,11 +116,11 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Firing")
 	FName MuzzleSocketName = "Muzzle";
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Firing")
-	FScalableFirearmFloat MultiShot = FScalableFirearmFloat(0);
+	FScalableFloat MultiShot = FScalableFloat(0);
 	UPROPERTY(EditAnywhere, Category = "Firearm|Firing")
-	FScalableFirearmFloat RoundsPerSecond = FScalableFirearmFloat(5.f);
+	FScalableFloat RoundsPerSecond = FScalableFloat(10);
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Firing|Burst")
-	FScalableFirearmFloat BurstSpeed = FScalableFirearmFloat(8);
+	FScalableFloat BurstSpeed;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Firing|Burst")
 	int BurstAmount = 3;
 	UPROPERTY(EditAnywhere, Category = "Firearm|Reloading")
@@ -131,13 +133,13 @@ protected:
 #pragma endregion
 #pragma region Component Defaults
 	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel+Muzzle")
-	FScalableFirearmFloat DefaultNoise = FScalableFirearmFloat(0);
+	FScalableFloat DefaultNoise = FScalableFloat(1);
 	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Grip")
 	TObjectPtr<UForceFeedbackEffect> DefaultFiringHaptic;
 	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Grip")
 	float DefaultFiringHapticIntensity;
 	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Magazine")
-	FScalableFirearmFloat DefaultMaxAmmo = FScalableFirearmFloat(30);
+	FScalableFloat DefaultMaxAmmo = FScalableFloat(30);
 	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Magazine")
 	TSubclassOf<AActor> DefaultBulletClass;
 	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel+Muzzle")
@@ -147,9 +149,9 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Stock")
 	float DefaultCamShakeIntensity = 1.f;	
 	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel+Muzzle")
-	FScalableFirearmFloat DefaultBulletSpreadForVolley;
+	FScalableFloat DefaultBulletSpreadForVolley = FScalableFloat(1);
 	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel+Muzzle")
-	FScalableFirearmFloat DefaultSpreadMultiplier = FScalableFirearmFloat(1);
+	FScalableFloat DefaultSpreadMultiplier = FScalableFloat(1);
 	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel+Muzzle")
 	USoundBase* DefaultFiringSound;
 	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel+Muzzle")
@@ -284,4 +286,21 @@ private:
 		return false;
 	}
 #pragma endregion
+
+	float Eval(const FScalableFloat& scalableFloat) const {
+		if(scalableFloat.IsValid()) {
+			return scalableFloat.GetValueAtLevel(GetScalingAttribute());
+		}
+		else {
+			return scalableFloat.Value;
+		}
+	}
+	float Eval(const FScalableFloat& scalableFloat, float scalingFloat) const {
+		if (scalableFloat.IsValid()) {
+			return scalableFloat.GetValueAtLevel(scalingFloat);
+		}
+		else {
+			return scalableFloat.Value;
+		}
+	}
 };

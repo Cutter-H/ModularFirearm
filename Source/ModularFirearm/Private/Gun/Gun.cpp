@@ -10,7 +10,7 @@
 #include "Net/UnrealNetwork.h"
 
 #pragma region Firing
-void AModularFirearm::BeginFiring() {
+void AModularFirearm::StartFiring() {
 	bWantsToFire = true;
 	if (RecoilTimer.IsValid()) {
 		return;
@@ -93,7 +93,9 @@ void AModularFirearm::FireWeapon(int burst) {
 				break;
 			}
 			case ETargetingMode::DirectionOfMuzzle: {
-				targetLocation = GetMuzzleTransform().GetLocation() + GetMuzzleTransform().GetRotation().GetForwardVector();
+				FRotator rot = UKismetMathLibrary::ComposeRotators(GetMuzzleTransform().GetRotation().Rotator(), MuzzleOffset);
+				rot = UKismetMathLibrary::RandomUnitVectorInConeInDegrees(rot.Vector(), GetBulletSpread(VolleyBulletCount)).Rotation();
+				targetLocation = GetMuzzleTransform().GetLocation() + rot.Vector();
 				break;
 			}
 			case ETargetingMode::CursorLocation: {
@@ -106,6 +108,8 @@ void AModularFirearm::FireWeapon(int burst) {
 				else {
 					targetLocation = hit.TraceEnd;
 				}
+				FVector dir = UKismetMathLibrary::RandomUnitVectorInConeInDegrees((targetLocation - GetMuzzleTransform().GetLocation()).GetSafeNormal(), GetBulletSpread(VolleyBulletCount));
+				targetLocation = GetMuzzleTransform().GetLocation() + dir;
 				break;
 			}
 			}
@@ -129,6 +133,7 @@ void AModularFirearm::FireWeapon(int burst) {
 
 		/* Setup Recoiling */ {
 			FTimerDelegate recoilDel;
+
 			float delay = 1 / GetFireRate();
 			GetWorld()->GetTimerManager().SetTimer(RecoilTimer, recoilDel, delay, false);
 		}
@@ -148,12 +153,12 @@ void AModularFirearm::StopReloading() {
 }
 void AModularFirearm::ReloadOnServer_Implementation(bool start) {
 	if (UAnimInstance* animInst = ReceiverMesh->GetAnimInstance()) {
-		bool reloadActive = animInst->Montage_IsPlaying(DefaultReloadMontage);
+		bool reloadActive = animInst->Montage_IsPlaying(GetReloadMontage());
 		if (!reloadActive) {
 			return;
 		}
 	}
-	PlayReplicatedMontage(DefaultReloadMontage, "Reload");
+	PlayReplicatedMontage(GetReloadMontage(), "Reload");
 }
 void AModularFirearm::LoadNewMagazine(bool bFreeFill) {
 	if (!HasAuthority() || GetReserveAmmo() <= 0) {
@@ -182,24 +187,25 @@ void AModularFirearm::LoadNewMagazine(bool bFreeFill) {
 #pragma region Getters/Setters
 int AModularFirearm::GetMaxAmmo() const {
 	if (IsValid(Magazine)) {
-		return Magazine->MaxAmmo.GetValue(GetScalingAttribute());
+		return Eval(Magazine->MaxAmmo);
 	}
-	return DefaultMaxAmmo.GetValue(GetScalingAttribute());
+	return Eval(DefaultMaxAmmo);
 }
 float AModularFirearm::GetBulletSpread(int volleyCount) const {
 	if (IsValid(Barrel)) {
 		return Barrel->GetSpread(volleyCount, GetScalingAttribute());
 	}
-	return DefaultBulletSpreadForVolley.GetValue(volleyCount) * DefaultSpreadMultiplier.GetValue(GetScalingAttribute());
+	return Eval(DefaultBulletSpreadForVolley, volleyCount)
+		* Eval(DefaultSpreadMultiplier);
 }
 float AModularFirearm::GetNoise() const {
 	if (IsValid(Muzzle)) {
-		return Muzzle->NoiseAmount.GetValue(GetScalingAttribute());
+		return Eval(Muzzle->NoiseAmount);
 	}
 	if (IsValid(Barrel)) {
-		return Barrel->NoiseAmount.GetValue(GetScalingAttribute());
+		return Eval(Barrel->NoiseAmount);
 	}
-	return DefaultNoise.GetValue(GetScalingAttribute());
+	return Eval(DefaultNoise);
 }
 UForceFeedbackEffect* AModularFirearm::GetHapticFeedback() const {
 	if (IsValid(Grip)) {
@@ -209,9 +215,9 @@ UForceFeedbackEffect* AModularFirearm::GetHapticFeedback() const {
 }
 float AModularFirearm::GetHapticIntensity() const  {
 	if (IsValid(Grip)) {
-		return Grip->HapticIntensity.GetValue(GetScalingAttribute());
+		return Eval(Grip->HapticIntensity);
 	}
-	return DefaultFiringHapticIntensity;
+	return Eval(DefaultFiringHapticIntensity);
 }
 TSubclassOf<UCameraShakeBase> AModularFirearm::GetCamShake() const  {
 	if (IsValid(Stock)) {
@@ -221,15 +227,15 @@ TSubclassOf<UCameraShakeBase> AModularFirearm::GetCamShake() const  {
 }
 float AModularFirearm::GetCamShakeIntensity() const {
 	if (IsValid(Grip)) {
-		return Grip->CamShakeIntensity.GetValue(GetScalingAttribute());
+		return Eval(Grip->CamShakeIntensity);
 	}
-	return DefaultCamShakeIntensity;
+	return Eval(DefaultCamShakeIntensity);
 }
 float AModularFirearm::GetFireRate() const {
-	return RoundsPerSecond.GetValue(GetScalingAttribute());
+	return Eval(RoundsPerSecond);
 }
 float AModularFirearm::GetBurstSpeed() const {
-	return BurstSpeed.GetValue(GetScalingAttribute());
+	return Eval(BurstSpeed);
 }
 int AModularFirearm::GetBurstAmount() const {
 	return BurstAmount;
@@ -249,16 +255,18 @@ FTransform AModularFirearm::GetMuzzleTransform() const {
 TSubclassOf<AActor> AModularFirearm::GetBulletClass() const {
 	if (IsValid(Magazine)) {
 		int bulletIndex = FMath::Clamp(GetScalingAttribute() - 1, 0, Magazine->BulletClasses.Num() - 1);
-		TSubclassOf<AActor> bulletClass = Magazine->BulletClasses[bulletIndex];
-		if (IsValid(bulletClass)) {
-			return bulletClass;
+		if (Magazine->BulletClasses.IsValidIndex(bulletIndex)) {
+			TSubclassOf<AActor> bulletClass = Magazine->BulletClasses[bulletIndex];
+			if (IsValid(bulletClass)) {
+				return bulletClass;
+			}
 		}
 	}
 	return DefaultBulletClass;
 }
 float AModularFirearm::GetReloadSpeedModifier() const {
 	if (IsValid(Magazine)) {
-		return Magazine->ReloadSpeedMultiplier.GetValue(GetScalingAttribute());
+		return Eval(Magazine->ReloadSpeedMultiplier);
 	}
 	return 1.0f;
 }
@@ -284,7 +292,7 @@ UAnimMontage* AModularFirearm::GetReloadMontage() {
 	if (IsValid(Magazine)) {
 		return Magazine->GetReloadMontage();
 	}
-	return DefaultReloadMontage;;
+	return DefaultReloadMontage;
 }
 int AModularFirearm::GetReserveAmmo_Implementation() const {
 	return GetMaxAmmo();
@@ -297,7 +305,7 @@ void AModularFirearm::PlayReplicatedMontage_Implementation(UAnimMontage* montage
 	}
 	if (!IsValid(montage)) {
 		if (UAnimInstance* animInst = ReceiverMesh->GetAnimInstance()) {
-			bool reloadActive = animInst->Montage_IsPlaying(DefaultReloadMontage);
+			bool reloadActive = animInst->Montage_IsPlaying(GetReloadMontage());
 			animInst->StopAllMontages(1.f);
 			if(reloadActive){
 				OnReloadMontageStop.Broadcast(DefaultReloadMontage);
@@ -433,6 +441,9 @@ void AModularFirearm::OnConstruction(const FTransform& Transform) {
 		ComponentSkins.Add(DefaultSkin);
 	}
 
+	if (bStartWithWeaponLoaded) {
+		CurrentMagazineAmmo = GetMaxAmmo();
+	}
 }
 void AModularFirearm::BeginPlay() {
 	Super::BeginPlay();

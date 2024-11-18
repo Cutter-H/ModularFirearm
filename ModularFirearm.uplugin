@@ -27,7 +27,7 @@
 			"Enabled": true
 		},
 		{
-			"Name": "DataRegistry",
+			"Name": "GameplayAbilities",
 			"Enabled":true
 		}
 	]
