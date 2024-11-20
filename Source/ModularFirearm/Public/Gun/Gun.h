@@ -12,6 +12,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBulletSpawnSignature, AActor*, ne
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPlayAnimationSignature, UAnimMontage*, montage);
 
 class UNiagaraSystem;
+class UModularFirearmAttributeSet;
+class UAbilitySystemComponent;
 
 UCLASS(PrioritizeCategories = ("Firearm"))
 class MODULARFIREARM_API AModularFirearm : public AActor
@@ -33,7 +35,7 @@ public:
 #pragma endregion
 #pragma region Core Functions
 	UFUNCTION(BlueprintCallable, Category = "Firearm|Attachment")
-	void SetComponent(const EFirearmComponentType& componentType, UGunPartDataBase* newComponent);
+	void SetComponent(const EFirearmComponentType& componentType, UGunPartDataBase* newComponent, int level = 1);
 
 	UFUNCTION(BlueprintCallable, Category = "Firearm|Attachment")
 	void SetComponentSkin(const EFirearmComponentType& componentType, const FString& skinName);
@@ -47,6 +49,8 @@ public:
 	void StartReloading();
 	UFUNCTION(BlueprintCallable, Category = "Firearm|Reload")
 	void StopReloading();
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Firearm|Reloading")
+	void LoadNewMagazine(bool bFreeFill = false);
 #pragma endregion
 #pragma region Getters/Setters
 	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
@@ -67,6 +71,8 @@ public:
 	float GetCamShakeIntensity() const;
 	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
 	float GetFireRate() const;
+	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
+	float GetMultishot() const; 
 	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
 	float GetBurstSpeed() const;
 	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
@@ -95,6 +101,12 @@ public:
 
 
 #pragma endregion
+#pragma region GAS
+	UFUNCTION(BlueprintCallable, Category = "Firearm|GAS")
+	FActiveGameplayEffectHandle ApplyGameplayEffectToFirearm(TSubclassOf<UGameplayEffect> gameplayEffectClass, int level, const FGameplayEffectContextHandle& effectContext = FGameplayEffectContextHandle());
+	UFUNCTION(BlueprintCallable, Category = "Firearm|GAS")
+	FActiveGameplayEffectHandle ApplyGameplayEffectSpecToFirearm(const FGameplayEffectSpec& gameplayEffectSpec);
+#pragma endregion
 protected:
 #pragma region Firearm Variables
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm", meta = (ExposeOnSpawn = "true"))
@@ -111,33 +123,43 @@ protected:
 	FRotator MuzzleOffset;
 	UPROPERTY(BlueprintReadOnly, Category = "Firearm|Firing")
 	int VolleyBulletCount = 0;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Firearm|Firing")
+	UPROPERTY(EditAnywhere, Category = "Firearm|Firing")
 	TEnumAsByte<ECollisionChannel> TargetingChannel = ECollisionChannel::ECC_Visibility;
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Firing")
+	UPROPERTY(EditAnywhere, Category = "Firearm|Firing")
 	FName MuzzleSocketName = "Muzzle";
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Firearm|Firing")
-	FScalableFloat MultiShot = FScalableFloat(0);
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Firearm|Firing")
-	FScalableFloat RoundsPerSecond = FScalableFloat(10);
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Firearm|Firing|Burst")
-	FScalableFloat BurstSpeed = FScalableFloat(20);
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Firearm|Firing|Burst")
-	int BurstAmount = 3;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Firearm|Reloading")
+	UPROPERTY(EditAnywhere, Category = "Firearm|Firing")
+	float DefaultMultishot = 0.f;
+	UPROPERTY(EditAnywhere, Category = "Firearm|Firing")
+	float DefaultFireRate = 10.f;
+	UPROPERTY(EditAnywhere, Category = "Firearm|Firing|Burst")
+	float DefaultBurstSpeed = 20.f;
+	UPROPERTY(EditAnywhere, Category = "Firearm|Firing|Burst")
+	int DefaultBurstAmount = 3;
+	UPROPERTY(EditAnywhere, Category = "Firearm|Reloading")
 	bool bRecycleAmmoOnReload = true;	
+	UPROPERTY(BlueprintReadOnly, Category = "GAS")
+	TSubclassOf<UAbilitySystemComponent> AbilitySystemClass;
+	UPROPERTY(BlueprintReadOnly, Category = "GAS")
+	TSubclassOf<UModularFirearmAttributeSet> AttributeSetClass;
+
 
 	UPROPERTY(Replicated, meta = (ArraySizeEnum = "EFirearmComponentType"))
 	TArray<FString> ComponentSkins;
+
+	UPROPERTY(BlueprintReadOnly, Category = "GAS")
+	TObjectPtr<UModularFirearmAttributeSet> AttributeSet;
+	UPROPERTY(BlueprintReadOnly, Category = "GAS")
+	TObjectPtr<UAbilitySystemComponent> AbilitySystem;
 #pragma endregion
 #pragma region Component Defaults
 	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel+Muzzle")
-	FScalableFloat DefaultNoise = FScalableFloat(1);
-	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Grip")
+	float DefaultNoise = 1.f;
+	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Grip", meta = (DisplayThumbnail = "false"))
 	TObjectPtr<UForceFeedbackEffect> DefaultFiringHaptic;
 	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Grip")
 	float DefaultFiringHapticIntensity;
 	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Magazine")
-	FScalableFloat DefaultMaxAmmo = FScalableFloat(30);
+	float DefaultMaxAmmo = 30.f;
 	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Magazine")
 	TSubclassOf<AActor> DefaultBulletClass;
 	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel+Muzzle")
@@ -146,10 +168,10 @@ protected:
 	TSubclassOf<UCameraShakeBase> DefaultCamShake;
 	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Stock")
 	float DefaultCamShakeIntensity = 1.f;	
+	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel+Muzzle", meta=(DisplayThumbnail="false"))
+	TObjectPtr<UCurveFloat> DefaultVolleySpread;
 	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel+Muzzle")
-	FScalableFloat DefaultBulletSpreadForVolley = FScalableFloat(1);
-	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel+Muzzle")
-	FScalableFloat DefaultSpreadMultiplier = FScalableFloat(1);
+	float DefaultSpreadMultiplier = 1.f;
 	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel+Muzzle")
 	USoundBase* DefaultFiringSound;
 	UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel+Muzzle")
@@ -205,8 +227,7 @@ private:
 	void FireWeapon(bool force = false);
 	UFUNCTION()
 	void BurstFireWeapon(int burst = 1);
-	UFUNCTION()
-	void LoadNewMagazine(bool bFreeFill = false);
+	
 #pragma endregion
 #pragma region Replication
 	UFUNCTION(NetMulticast, Reliable)
@@ -237,36 +258,39 @@ private:
 	TArray<UMeshComponent*> PartMeshes;
 #pragma endregion
 #pragma region Component Data
+	FActiveGameplayEffectHandle MuzzleEffect;
+	FActiveGameplayEffectHandle BarrelEffect;
+	FActiveGameplayEffectHandle GripEffect;
+	FActiveGameplayEffectHandle MagazineEffect; 
+	FActiveGameplayEffectHandle SightEffect;
+	FActiveGameplayEffectHandle StockEffect;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleGun", EditConditionHides, DisplayThumbnail = "false"), Replicated, ReplicatedUsing = OnRep_Muzzle)
 	TObjectPtr<UGunBarrelData> Muzzle;
-	UFUNCTION()
-	void OnRep_Muzzle();
-
 	UPROPERTY(EditDefaultsOnly, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleGun", EditConditionHides, DisplayThumbnail = "false"), Replicated, ReplicatedUsing = OnRep_Barrel)
 	TObjectPtr<UGunBarrelData> Barrel;
-	UFUNCTION()
-	void OnRep_Barrel();
-
 	UPROPERTY(EditDefaultsOnly, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleGun", EditConditionHides, DisplayThumbnail = "false"), Replicated, ReplicatedUsing = OnRep_Grip)
 	TObjectPtr<UGunGripData> Grip;
-	UFUNCTION()
-	void OnRep_Grip();
-
 	UPROPERTY(EditDefaultsOnly, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleGun", EditConditionHides, DisplayThumbnail = "false"), Replicated, ReplicatedUsing = OnRep_Magazine)
 	TObjectPtr<UGunMagazineData> Magazine;
-	UFUNCTION()
-	void OnRep_Magazine();
-
 	UPROPERTY(EditDefaultsOnly, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleGun", EditConditionHides, DisplayThumbnail = "false"), Replicated, ReplicatedUsing = OnRep_Sight)
 	TObjectPtr<UGunSightData> Sight;
-	UFUNCTION()
-	void OnRep_Sight();
-
 	UPROPERTY(EditDefaultsOnly, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleGun", EditConditionHides, DisplayThumbnail = "false"), Replicated, ReplicatedUsing = OnRep_Stock)
 	TObjectPtr<UGunStockData> Stock;
+
+	UFUNCTION()
+	void OnRep_Muzzle();
+	UFUNCTION()
+	void OnRep_Barrel();
+	UFUNCTION()
+	void OnRep_Grip();
+	UFUNCTION()
+	void OnRep_Magazine();
+	UFUNCTION()
+	void OnRep_Sight();
 	UFUNCTION()
 	void OnRep_Stock();
+
 	UGunPartDataBase* GetPartData(const EFirearmComponentType& componentType) const {
 		switch (componentType) {
 		case 1: return Barrel;
@@ -278,6 +302,17 @@ private:
 		default: return nullptr;
 		}
 	}
+	FActiveGameplayEffectHandle& GetEffect(const EFirearmComponentType& componentType) {
+		switch (componentType) {
+		case 1: return BarrelEffect;
+		case 2: return GripEffect;
+		case 3: return MagazineEffect;
+		case 4: return SightEffect;
+		case 5: return StockEffect;
+		case 6: return MuzzleEffect;
+		default: return;
+		}
+	}
 	bool SetPartBaseData(UGunPartDataBase* part) {
 		if (part->IsA<UGunMuzzleData>())	{ Muzzle = Cast<UGunMuzzleData>(part);			return true; }
 		if (part->IsA<UGunBarrelData>())	{ Barrel = Cast<UGunBarrelData>(part);			return true; }
@@ -286,24 +321,6 @@ private:
 		if (part->IsA<UGunSightData>())		{ Sight = Cast<UGunSightData>(part);			return true; }
 		if (part->IsA<UGunStockData>())		{ Stock = Cast<UGunStockData>(part);			return true; }
 		return false;
-	}
-#pragma endregion
-#pragma region Curve Evaluation Helper Functions
-	float Eval(const FScalableFloat& scalableFloat) const {
-		if(scalableFloat.IsValid()) {
-			return scalableFloat.GetValueAtLevel(GetScalingAttribute());
-		}
-		else {
-			return scalableFloat.Value;
-		}
-	}
-	float Eval(const FScalableFloat& scalableFloat, float scalingFloat) const {
-		if (scalableFloat.IsValid()) {
-			return scalableFloat.GetValueAtLevel(scalingFloat);
-		}
-		else {
-			return scalableFloat.Value;
-		}
 	}
 #pragma endregion
 };

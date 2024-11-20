@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
-#include "ScalableFloat.h"
+#include "GameplayEffect.h"
 #include "ModularFirearmDataAssets.generated.h"
 
 UENUM(BlueprintType)
@@ -43,12 +43,27 @@ class MODULARFIREARM_API UGunPartDataBase : public UDataAsset
 {
 	GENERATED_BODY()
 public:
-	UPROPERTY(EditAnywhere, Category = "GunPart", meta = (DisplayPriority = 1))
+	/*
+	* Mesh of the part.
+	*/UPROPERTY(EditAnywhere, Category = "GunPart", meta = (DisplayPriority = 1))
 	TObjectPtr<UStaticMesh> Mesh;
-	UPROPERTY(EditAnywhere, Category = "GunPart", meta = (DisplayPriority = 1))
+	/*
+	* The different materials that can be set for this part.
+	* The material is changed on slot 0.
+	*/UPROPERTY(EditAnywhere, Category = "GunPart", meta = (DisplayPriority = 1))
 	TMap<FString, UMaterialInterface*> ReceiverSkins;
-	UPROPERTY(EditAnywhere, Category = "GunPart", meta = (DisplayPriority = 1))
+	/*
+	* Where on the receiver is this part attached.
+	* Muzzle parts will attempt to attach to the barrel, but will fall back to the reciever.
+	*/UPROPERTY(EditAnywhere, Category = "GunPart", meta = (DisplayPriority = 1))
 	FName AttachSocketName = "Attachment";
+
+	/* 
+	* Make the effect for the part 
+	*/UFUNCTION(BlueprintCallable, Category = "GunPart|GAS")
+	virtual FGameplayEffectSpec GetEffect(UAbilitySystemComponent* abilitySystem, UModularFirearmAttributeSet* attributes) const {
+		return FGameplayEffectSpec();
+	}
 
 };
 
@@ -59,44 +74,64 @@ class MODULARFIREARM_API UGunBarrelData : public UGunPartDataBase
 {
 	GENERATED_BODY()
 public:
-	UGunBarrelData() { 
-		AttachSocketName = "Barrel";
-	}
-	UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
-	FScalableFloat bulletVolleySpread = FScalableFloat(0);
-	UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
-	FScalableFloat spreadMultiplier= FScalableFloat(1);
-
-	/* Should be added to the bullet. */ /*
-	// When Damage falloff begins to take affect. (If this is below 0 then there is no falloff.)
-	UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
-	FScalableFloat falloffBeginDistance = FScalableFloat(-1.f);
-	// Distance where the falloff ends. (End distance is BeginDistance + Duration)
-	UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
-	FScalableFloat falloffDuration = FScalableFloat(0.f);
-	// CurveTable used to alter damage for falloff. 0 = BeginDistance, 1 = BeginDistance + Duration
-	UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
-	UCurveFloat* falloffCurve;
-	*/
-	// Niagara system when firing.
-	UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
+	UGunBarrelData() { AttachSocketName = "Barrel"; }
+	/*
+	* This affects bullet spread during continuous fire. Such as changing spread based on 1st shot or 5th shot.
+	* X determines shot number. Y determines spread.
+	*/UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
+	TObjectPtr<UCurveFloat> VolleySpread;
+	/*
+	* VolleySpread is multiplied by this to get the final bullet spread angles.
+	*/UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
+	float DefaultSpreadMultiplier = 1.f;
+	/*
+	* Niagara system when firing.
+	*/UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
 	class UNiagaraSystem* MuzzleFlash;
-	// Audio played when firing.
-	UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
+	/*
+	* Audio played when firing.
+	*/UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
 	USoundBase* DefaultFiringSound;
-	// For AI Noise
-	UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
-	FScalableFloat NoiseAmount = FScalableFloat(1);
-	/* Created function so randomization or logic can be added when grabbing sound. */
-	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Firearm Data")
+	/*
+	* For AI Noise
+	*/UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
+	float DefaultNoise = 1.f;
+	/*
+	* Function for randomization or logic to be added when grabbing sound.
+	*/UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Firearm Data")
 	USoundBase* GetFiringSound() const;
 	USoundBase* GetFiringSound_Implementation() const { return DefaultFiringSound; }
 
 	UFUNCTION(BlueprintCallable, Category = "FirearmData")
-	float GetSpread(float volleyCount, float scale) const {
-		return bulletVolleySpread.GetValueAtLevel(volleyCount) * spreadMultiplier.GetValueAtLevel(scale);
+	float GetVolleySpread(float volleyCount) const {
+		if (IsValid(VolleySpread)) {
+			return VolleySpread->GetFloatValue(volleyCount);
+		}
+		return 0.f;
 	}
+	virtual FGameplayEffectSpec GetEffect(UAbilitySystemComponent* abilitySystem, UModularFirearmAttributeSet* attributes) const override {
+		// Create the effect and make it instant. We want this to modify base values.
+		UGameplayEffect* effect = UGameplayEffect::StaticClass()->GetDefaultObject<UGameplayEffect>();
+		effect->DurationPolicy = EGameplayEffectDurationType::Instant;
 
+		// Add Spread Multiplier
+		FGameplayModifierInfo SpreadMultiplier_Modifier;
+		SpreadMultiplier_Modifier.Attribute = attributes->GetSpreadMultiplierAttribute();
+		SpreadMultiplier_Modifier.ModifierOp = EGameplayModOp::Override;
+		SpreadMultiplier_Modifier.ModifierMagnitude = FGameplayEffectModifierMagnitude(FScalableFloat(DefaultSpreadMultiplier));
+		effect->Modifiers.Add(SpreadMultiplier_Modifier);
+
+		// Add Noise Modifier
+		FGameplayModifierInfo Noise_Modifier;
+		Noise_Modifier.Attribute = attributes->GetNoiseAttribute();
+		Noise_Modifier.ModifierOp = EGameplayModOp::Override;
+		Noise_Modifier.ModifierMagnitude = FGameplayEffectModifierMagnitude(FScalableFloat(DefaultNoise));
+		effect->Modifiers.Add(Noise_Modifier);
+
+		FGameplayEffectContextHandle context = abilitySystem->MakeEffectContext();
+		
+		return FGameplayEffectSpec(effect, context, 1);
+	}
 };
 #pragma endregion
 #pragma region Muzzle
@@ -116,20 +151,31 @@ class MODULARFIREARM_API UGunGripData : public UGunPartDataBase
 {
 	GENERATED_BODY()
 public:
-	UGunGripData() { 
-		AttachSocketName = "Grip"; 
-	}
-	// Multiplies the default cam shake. The base value is found in the stock component.
-	UPROPERTY(EditAnywhere, Category = "Grip", meta = (DisplayPriority = 2))
-	FScalableFloat recoilMultiplier;
-	// The base haptic feedback class
-	UPROPERTY(EditAnywhere, Category = "Grip", meta = (DisplayPriority = 2))
+	UGunGripData() { AttachSocketName = "Grip"; }
+	/*
+	* The base haptic feedback class
+	*/UPROPERTY(EditAnywhere, Category = "Grip", meta = (DisplayPriority = 2))
 	TObjectPtr<UForceFeedbackEffect> HapticFeedback;
-	// Changes the intensity of the haptic feedback based on firearm level.
-	UPROPERTY(EditAnywhere, Category = "Grip", meta = (DisplayPriority = 2))
-	FScalableFloat HapticIntensity;
-	UPROPERTY(EditAnywhere, Category = "Grip", meta = (DisplayPriority = 2))
-	FScalableFloat CamShakeIntensity;
+	/*
+	* Changes the intensity of the haptic feedback based on firearm level.
+	*/UPROPERTY(EditAnywhere, Category = "Grip", meta = (DisplayPriority = 2))
+	float HapticIntensity = 1.f;
+	virtual FGameplayEffectSpec GetEffect(UAbilitySystemComponent* abilitySystem, UModularFirearmAttributeSet* attributes) const override {
+		// Create the effect and make it instant. We want this to modify base values.
+		UGameplayEffect* effect = UGameplayEffect::StaticClass()->GetDefaultObject<UGameplayEffect>();
+		effect->DurationPolicy = EGameplayEffectDurationType::Instant;
+
+		// Add Haptic Intensity
+		FGameplayModifierInfo HapticIntensity_Modifier;
+		HapticIntensity_Modifier.Attribute = attributes->GetHapticIntensityAttribute();
+		HapticIntensity_Modifier.ModifierOp = EGameplayModOp::Override;
+		HapticIntensity_Modifier.ModifierMagnitude = FGameplayEffectModifierMagnitude(FScalableFloat(HapticIntensity));
+		effect->Modifiers.Add(HapticIntensity_Modifier);
+
+		FGameplayEffectContextHandle context = abilitySystem->MakeEffectContext();
+
+		return FGameplayEffectSpec(effect, context, 1);
+	}
 };
 #pragma endregion
 #pragma region Magazine
@@ -138,15 +184,13 @@ class MODULARFIREARM_API UGunMagazineData : public UGunPartDataBase
 {
 	GENERATED_BODY()
 public:
-	UGunMagazineData() { 
-		AttachSocketName = "Magazine";
-	}
+	UGunMagazineData() { AttachSocketName = "Magazine"; }
 	UPROPERTY(EditAnywhere, Category = "Magazine", meta = (DisplayPriority = 2))
 	TArray<TSubclassOf<AActor>> BulletClasses;
 	UPROPERTY(EditAnywhere, Category = "Magazine", meta = (DisplayPriority = 2))
-	FScalableFloat MaxAmmo = FScalableFloat(30);
+	float MaxAmmo = 30;
 	UPROPERTY(EditAnywhere, Category = "Magazine", meta = (DisplayPriority = 2))
-	FScalableFloat ReloadSpeedMultiplier = FScalableFloat(1);
+	float ReloadSpeed = 1;
 	UPROPERTY(EditAnywhere, Category = "Magazine", meta = (DisplayPriority = 2))
 	UAnimMontage* DefaultReloadMontage;
 	/* Created function so randomization or logic can be added when grabbing montage. */
@@ -154,7 +198,29 @@ public:
 	UAnimMontage* GetReloadMontage() const;
 	UAnimMontage* GetReloadMontage_Implementation() const { return DefaultReloadMontage; }
 
+	virtual FGameplayEffectSpec GetEffect(UAbilitySystemComponent* abilitySystem, UModularFirearmAttributeSet* attributes) const override {
+		// Create the effect and make it instant. We want this to modify base values.
+		UGameplayEffect* effect = UGameplayEffect::StaticClass()->GetDefaultObject<UGameplayEffect>();
+		effect->DurationPolicy = EGameplayEffectDurationType::Instant;
 
+		// Add Max Ammo
+		FGameplayModifierInfo MaxAmmo_Modifier;
+		MaxAmmo_Modifier.Attribute = attributes->GetMaxAmmoAttribute();
+		MaxAmmo_Modifier.ModifierOp = EGameplayModOp::Override;
+		MaxAmmo_Modifier.ModifierMagnitude = FGameplayEffectModifierMagnitude(FScalableFloat(MaxAmmo));
+		effect->Modifiers.Add(MaxAmmo_Modifier);
+
+		// Add Reload Speed
+		FGameplayModifierInfo ReloadSpeed_Modifier;
+		ReloadSpeed_Modifier.Attribute = attributes->GetReloadSpeedAttribute();
+		ReloadSpeed_Modifier.ModifierOp = EGameplayModOp::Override;
+		ReloadSpeed_Modifier.ModifierMagnitude = FGameplayEffectModifierMagnitude(FScalableFloat(ReloadSpeed));
+		effect->Modifiers.Add(ReloadSpeed_Modifier);
+
+		FGameplayEffectContextHandle context = abilitySystem->MakeEffectContext();
+
+		return FGameplayEffectSpec(effect, context, 1);
+	}
 };
 #pragma endregion
 #pragma region Sight
@@ -163,13 +229,26 @@ class MODULARFIREARM_API UGunSightData : public UGunPartDataBase
 {
 	GENERATED_BODY()
 public:
-	UGunSightData() { 
-		AttachSocketName = "Sight";
+	UGunSightData() { AttachSocketName = "Sight"; }
+	UPROPERTY(EditAnywhere, Category = "Sight", meta = (DisplayPriority = 2))
+	float FOVZoom = 1.f;
+
+	virtual FGameplayEffectSpec GetEffect(UAbilitySystemComponent* abilitySystem, UModularFirearmAttributeSet* attributes) const override {
+		// Create the effect and make it instant. We want this to modify base values.
+		UGameplayEffect* effect = UGameplayEffect::StaticClass()->GetDefaultObject<UGameplayEffect>();
+		effect->DurationPolicy = EGameplayEffectDurationType::Instant;
+
+		// Add FOV Zoom
+		FGameplayModifierInfo MaxAmmo_Modifier;
+		MaxAmmo_Modifier.Attribute = attributes->GetMaxAmmoAttribute();
+		MaxAmmo_Modifier.ModifierOp = EGameplayModOp::Override;
+		MaxAmmo_Modifier.ModifierMagnitude = FGameplayEffectModifierMagnitude(FScalableFloat(FOVZoom));
+		effect->Modifiers.Add(MaxAmmo_Modifier);
+
+		FGameplayEffectContextHandle context = abilitySystem->MakeEffectContext();
+
+		return FGameplayEffectSpec(effect, context, 1);
 	}
-	UPROPERTY(EditAnywhere, Category = "Sight", meta = (DisplayPriority = 2))
-	FScalableFloat FOVZoomMultiplier;
-	UPROPERTY(EditAnywhere, Category = "Sight", meta = (DisplayPriority = 2))
-	FScalableFloat FOVZoomAmount;
 };
 #pragma endregion
 #pragma region Stock
@@ -178,17 +257,37 @@ class MODULARFIREARM_API UGunStockData : public UGunPartDataBase
 {
 	GENERATED_BODY()
 public:
-	UGunStockData() { 
-		AttachSocketName = "Stock";
-	}
-	UPROPERTY(EditAnywhere, Category = "Stock", meta = (DisplayPriority = 2))
-	UCurveLinearColor* BaseRecoil;
-	UPROPERTY(EditAnywhere, Category = "Stock", meta = (DisplayPriority = 2))
-	FScalableFloat RecoilMultiplier = FScalableFloat(1);
-	UPROPERTY(EditAnywhere, Category = "Stock", meta = (DisplayPriority = 2))
-	FScalableFloat SwapMultiplier = FScalableFloat(1);
+	UGunStockData() { AttachSocketName = "Stock"; }
 	UPROPERTY(EditAnywhere, Category = "Stock", meta = (DisplayPriority = 2))
 	TSubclassOf<UCameraShakeBase> CamShake;
+	UPROPERTY(EditAnywhere, Category = "Stock", meta = (DisplayPriority = 2))
+	float CamShakeIntensity = 1.f;
+	UPROPERTY(EditAnywhere, Category = "Stock", meta = (DisplayPriority = 2))
+	float SwapSpeed = 1.f;
+	
+	virtual FGameplayEffectSpec GetEffect(UAbilitySystemComponent* abilitySystem, UModularFirearmAttributeSet* attributes) const override {
+		// Create the effect and make it instant. We want this to modify base values.
+		UGameplayEffect* effect = UGameplayEffect::StaticClass()->GetDefaultObject<UGameplayEffect>();
+		effect->DurationPolicy = EGameplayEffectDurationType::Instant;
+
+		// Add Cam Shake Intensity
+		FGameplayModifierInfo CamShakeIntensity_Modifier;
+		CamShakeIntensity_Modifier.Attribute = attributes->GetCamShakeIntensityAttribute();
+		CamShakeIntensity_Modifier.ModifierOp = EGameplayModOp::Override;
+		CamShakeIntensity_Modifier.ModifierMagnitude = FGameplayEffectModifierMagnitude(FScalableFloat(CamShakeIntensity));
+		effect->Modifiers.Add(CamShakeIntensity_Modifier);
+
+		// Add Swap Speed
+		FGameplayModifierInfo SwapSpeed_Modifier;
+		SwapSpeed_Modifier.Attribute = attributes->GetSwapSpeedAttribute();
+		SwapSpeed_Modifier.ModifierOp = EGameplayModOp::Override;
+		SwapSpeed_Modifier.ModifierMagnitude = FGameplayEffectModifierMagnitude(FScalableFloat(SwapSpeed));
+		effect->Modifiers.Add(SwapSpeed_Modifier);
+
+		FGameplayEffectContextHandle context = abilitySystem->MakeEffectContext();
+
+		return FGameplayEffectSpec(effect, context, 1);
+	}
 };
 #pragma endregion
 

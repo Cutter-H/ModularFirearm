@@ -7,6 +7,8 @@
 #include "GameFramework/HUD.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "AbilitySystemComponent.h"
+#include "GAS/ModularFirearmAttributeSet.h"
 #include "Net/UnrealNetwork.h"
 
 #pragma region Firing
@@ -205,26 +207,31 @@ void AModularFirearm::LoadNewMagazine(bool bFreeFill) {
 #pragma endregion
 #pragma region Getters/Setters
 int AModularFirearm::GetMaxAmmo() const {
-	if (IsValid(Magazine)) {
-		return Eval(Magazine->MaxAmmo);
+	if (IsValid(AttributeSet)) {
+		return AttributeSet->GetMaxAmmo();
 	}
-	return Eval(DefaultMaxAmmo);
+	return DefaultMaxAmmo;
 }
 float AModularFirearm::GetBulletSpread(int volleyCount) const {
+	float retVal = 0.f;
 	if (IsValid(Barrel)) {
-		return Barrel->GetSpread(volleyCount, GetScalingAttribute());
+		retVal = Barrel->GetVolleySpread(volleyCount);
 	}
-	return Eval(DefaultBulletSpreadForVolley, volleyCount)
-		* Eval(DefaultSpreadMultiplier);
+	else {
+		if (IsValid(DefaultVolleySpread)) {
+			retVal = DefaultVolleySpread->GetFloatValue(volleyCount);
+		}
+	}
+	if (IsValid(AttributeSet)) {
+		retVal *= AttributeSet->GetSpreadMultiplier();
+	}
+	return retVal;
 }
 float AModularFirearm::GetNoise() const {
-	if (IsValid(Muzzle)) {
-		return Eval(Muzzle->NoiseAmount);
+	if (IsValid(AttributeSet)) {
+		return AttributeSet->GetNoise();
 	}
-	if (IsValid(Barrel)) {
-		return Eval(Barrel->NoiseAmount);
-	}
-	return Eval(DefaultNoise);
+	return DefaultNoise;
 }
 UForceFeedbackEffect* AModularFirearm::GetHapticFeedback() const {
 	if (IsValid(Grip)) {
@@ -233,10 +240,10 @@ UForceFeedbackEffect* AModularFirearm::GetHapticFeedback() const {
 	return DefaultFiringHaptic;
 }
 float AModularFirearm::GetHapticIntensity() const  {
-	if (IsValid(Grip)) {
-		return Eval(Grip->HapticIntensity);
+	if (IsValid(AttributeSet)) {
+		return AttributeSet->GetHapticIntensity();
 	}
-	return Eval(DefaultFiringHapticIntensity);
+	return DefaultFiringHapticIntensity;
 }
 TSubclassOf<UCameraShakeBase> AModularFirearm::GetCamShake() const  {
 	if (IsValid(Stock)) {
@@ -245,19 +252,34 @@ TSubclassOf<UCameraShakeBase> AModularFirearm::GetCamShake() const  {
 	return DefaultCamShake;
 }
 float AModularFirearm::GetCamShakeIntensity() const {
-	if (IsValid(Grip)) {
-		return Eval(Grip->CamShakeIntensity);
+	if (IsValid(AttributeSet)) {
+		return AttributeSet->GetCamShakeIntensity();
 	}
-	return Eval(DefaultCamShakeIntensity);
+	return DefaultCamShakeIntensity;
 }
 float AModularFirearm::GetFireRate() const {
-	return Eval(RoundsPerSecond);
+	if (IsValid(AttributeSet)) {
+		return AttributeSet->GetFireRate();
+	}
+	return DefaultFireRate;
+}
+float AModularFirearm::GetMultishot() const {
+	if (IsValid(AttributeSet)) {
+		return AttributeSet->GetMultishot();
+	}
+	return DefaultMultishot;
 }
 float AModularFirearm::GetBurstSpeed() const {
-	return Eval(BurstSpeed);
+	if (IsValid(AttributeSet)) {
+		return AttributeSet->GetBurstSpeed();
+	}
+	return DefaultBurstSpeed;
 }
 int AModularFirearm::GetBurstAmount() const {
-	return BurstAmount;
+	if (IsValid(AttributeSet)) {
+		return AttributeSet->GetBurstAmount();
+	}
+	return DefaultBurstAmount;
 }
 FTransform AModularFirearm::GetMuzzleTransform() const {
 	if (IsValid(MuzzleMesh) && MuzzleMesh->DoesSocketExist(MuzzleSocketName)) {
@@ -284,8 +306,8 @@ TSubclassOf<AActor> AModularFirearm::GetBulletClass() const {
 	return DefaultBulletClass;
 }
 float AModularFirearm::GetReloadSpeedModifier() const {
-	if (IsValid(Magazine)) {
-		return Eval(Magazine->ReloadSpeedMultiplier);
+	if (IsValid(AttributeSet)) {
+		return AttributeSet->GetReloadSpeed();
 	}
 	return 1.0f;
 }
@@ -315,6 +337,25 @@ UAnimMontage* AModularFirearm::GetReloadMontage() {
 }
 int AModularFirearm::GetReserveAmmo_Implementation() const {
 	return GetMaxAmmo();
+}
+#pragma endregion
+#pragma region GAS
+FActiveGameplayEffectHandle AModularFirearm::ApplyGameplayEffectToFirearm(TSubclassOf<UGameplayEffect> gameplayEffectClass, int level, const FGameplayEffectContextHandle& effectContext) {
+	if (!IsValid(AbilitySystem)) {
+		UE_LOG(LogModularFirearm, Warning, TEXT("Attempted to apply a Gameplay Effect to firearm, but no Ability System was present."));
+		return;
+	}
+	UGameplayEffect* effect = NewObject<UGameplayEffect>(GetWorld(), gameplayEffectClass);
+	auto predictionKey = AbilitySystem->GetPredictionKeyForNewAction();
+	return AbilitySystem->ApplyGameplayEffectToSelf(effect, level, effectContext, predictionKey);
+}
+FActiveGameplayEffectHandle AModularFirearm::ApplyGameplayEffectSpecToFirearm(const FGameplayEffectSpec& gameplayEffectSpec) {
+	if (!IsValid(AbilitySystem)) {
+		UE_LOG(LogModularFirearm, Warning, TEXT("Attempted to apply a Gameplay Effect to firearm, but no Ability System was present."));
+		return;
+	}
+	auto predictionKey = AbilitySystem->GetPredictionKeyForNewAction();
+	return AbilitySystem->ApplyGameplayEffectSpecToSelf(gameplayEffectSpec, predictionKey);
 }
 #pragma endregion
 #pragma region Cosmetics
@@ -456,12 +497,22 @@ void AModularFirearm::OnConstruction(const FTransform& Transform) {
 			}
 		}
 	}
-	for (int i = 0; i <= 6; i++) {
-		ComponentSkins.Add(DefaultSkin);
-	}
+	for (int i = 0; i <= 6; i++)	{	ComponentSkins.Add(DefaultSkin);		}
+	if  (bStartWithWeaponLoaded)	{	CurrentMagazineAmmo = GetMaxAmmo();		}
 
-	if (bStartWithWeaponLoaded) {
-		CurrentMagazineAmmo = GetMaxAmmo();
+	/* GAS Setup */ {
+		if (!IsValid(AbilitySystemClass)) {
+			AbilitySystemClass = UAbilitySystemComponent::StaticClass();
+		}
+		if (!IsValid(AttributeSetClass)) {
+			AttributeSetClass = UModularFirearmAttributeSet::StaticClass();
+		}
+
+		AbilitySystem = Cast<UAbilitySystemComponent>(AddComponentByClass(AbilitySystemClass, true, FTransform(), false));
+		if (IsValid(AbilitySystem)) {
+			AttributeSet = NewObject<UModularFirearmAttributeSet>(AbilitySystem, AttributeSetClass, "Modular Firearm Attribute Set");
+			AbilitySystem->AddAttributeSetSubobject<UModularFirearmAttributeSet>(AttributeSet);
+		}
 	}
 }
 void AModularFirearm::BeginPlay() {
@@ -490,7 +541,7 @@ void AModularFirearm::GetLifetimeReplicatedProps(TArray< FLifetimeProperty >& Ou
 }
 #pragma endregion
 #pragma region Customization
-void AModularFirearm::SetComponent(const EFirearmComponentType& componentType, UGunPartDataBase* newComponent) {
+void AModularFirearm::SetComponent(const EFirearmComponentType& componentType, UGunPartDataBase* newComponent, int level) {
 	if (bUseSimpleFirearm) {
 		UE_LOG(LogModularFirearm, Warning, TEXT("Attempted to use modular features with UseSimpleFirearm enabled."));
 		return;
@@ -523,7 +574,9 @@ void AModularFirearm::SetComponent(const EFirearmComponentType& componentType, U
 		else {
 			modifiedComp->SetStaticMesh(nullptr);
 		}
+		ApplyGameplayEffectSpecToFirearm(newComponent->GetEffect());
 	}
+
 }
 void AModularFirearm::SetComponentSkin(const EFirearmComponentType& componentType, const FString& skinName) {
 	if (!HasAuthority() && !GetIsReplicated()) {
