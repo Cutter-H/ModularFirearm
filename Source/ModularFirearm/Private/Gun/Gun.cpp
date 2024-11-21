@@ -1,4 +1,4 @@
-// Cutter Hodnett // 2024
+// Cutter Hodnett // 2024-
 
 
 #include "Gun/Gun.h"
@@ -41,14 +41,13 @@ void AModularFirearm::StopFiring() {
 		GetWorld()->GetTimerManager().PauseTimer(FiringTimer);
 	}
 }
-void AModularFirearm::SpawnBullet_Implementation(const FVector& targetLocation) {
+void AModularFirearm::SpawnBullet_Implementation(const FVector& targetDirection) {
 	TSubclassOf<AActor> bulletClass = GetBulletClass();
 	if (!IsValid(bulletClass)) {
 		return;
 	}
 	FTransform spawnTransform = GetMuzzleTransform();
-	FVector direction = UKismetMathLibrary::FindLookAtRotation(spawnTransform.GetLocation(), targetLocation).Vector();
-	spawnTransform.SetRotation(FQuat::MakeFromRotator(direction.Rotation()));
+	spawnTransform.SetRotation(FQuat::MakeFromRotator(targetDirection.Rotation()));
 	FActorSpawnParameters spawnParams;
 	spawnParams.Owner = this; spawnParams.Instigator = GetInstigator(); spawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	AActor* bullet = GetWorld()->SpawnActor<AActor>(bulletClass, spawnTransform, spawnParams);
@@ -84,7 +83,6 @@ void AModularFirearm::FireWeapon(bool force) {
 						APlayerController* playerCon = GetInstigator()->GetController<APlayerController>();
 						if (APlayerCameraManager* camMan = playerCon->PlayerCameraManager) {
 							FVector camLoc; FRotator camRot; camMan->GetCameraViewPoint(camLoc, camRot);
-							camRot = UKismetMathLibrary::RandomUnitVectorInConeInDegrees(camRot.Vector(), GetBulletSpread(VolleyBulletCount)).Rotation();
 							FCollisionQueryParams hitParams; hitParams.AddIgnoredActor(GetOwner()); hitParams.AddIgnoredActor(this); hitParams.bTraceComplex = true;
 							FHitResult hit;  if (GetWorld()->LineTraceSingleByChannel(hit, camLoc, camLoc + (camRot.Vector() * MAX_flt), TargetingChannel, hitParams)) {
 								targetLocation = hit.ImpactPoint;
@@ -102,7 +100,6 @@ void AModularFirearm::FireWeapon(bool force) {
 			}
 			case ETargetingMode::DirectionOfMuzzle: {
 				FRotator rot = UKismetMathLibrary::ComposeRotators(GetMuzzleTransform().GetRotation().Rotator(), MuzzleOffset);
-				rot = UKismetMathLibrary::RandomUnitVectorInConeInDegrees(rot.Vector(), GetBulletSpread(VolleyBulletCount)).Rotation();
 				targetLocation = GetMuzzleTransform().GetLocation() + rot.Vector();
 				break;
 			}
@@ -116,14 +113,24 @@ void AModularFirearm::FireWeapon(bool force) {
 				else {
 					targetLocation = hit.TraceEnd;
 				}
-				FVector dir = UKismetMathLibrary::RandomUnitVectorInConeInDegrees((targetLocation - GetMuzzleTransform().GetLocation()).GetSafeNormal(), GetBulletSpread(VolleyBulletCount));
-				targetLocation = GetMuzzleTransform().GetLocation() + dir;
 				break;
 			}
 			}
 		}
+		FRandomStream stream;
+		if (IsValid(GetWorld())) {
+			stream = FRandomStream(GetWorld()->GetTimeSeconds());
+		}
+		bool bAdd = UKismetMathLibrary::RandomBoolWithWeightFromStream(stream, FMath::Fmod(GetMultishot(), 1.f));
+		int additionalBullets = bAdd + GetMultishot();
+		for (int i = 0; i <= additionalBullets; i++) {
+			FVector targetDirection = (targetLocation - GetMuzzleTransform().GetLocation()).GetSafeNormal();
+			
+			targetDirection = UKismetMathLibrary::RandomUnitVectorInConeInDegreesFromStream(stream, targetDirection, GetBulletSpread(VolleyBulletCount));
+			
+			SpawnBullet(targetLocation);
+		}
 		VolleyBulletCount++;
-		SpawnBullet(targetLocation);
 		/* Effects */ {
 			if (GetCamShake()) {
 				if (IsValid(GetInstigator())) {
@@ -157,7 +164,7 @@ void AModularFirearm::BurstFireWeapon(int burst) {
 		FTimerHandle burstHandle;
 		FTimerDelegate burstDel;
 		burstDel.BindUObject(this, &AModularFirearm::BurstFireWeapon, newBurst);
-		float burstDelay = (1 / Eval(BurstSpeed));
+		float burstDelay = (1 / GetBurstSpeed());
 		GetWorld()->GetTimerManager().SetTimer(burstHandle, burstDel, burstDelay, false);
 	}
 }
@@ -293,9 +300,9 @@ FTransform AModularFirearm::GetMuzzleTransform() const {
 	}
 	return GetActorTransform();
 }
-TSubclassOf<AActor> AModularFirearm::GetBulletClass() const {
+TSubclassOf<AActor> AModularFirearm::GetBulletClass(int bulletType) const {
 	if (IsValid(Magazine)) {
-		int bulletIndex = FMath::Clamp(GetScalingAttribute() - 1, 0, Magazine->BulletClasses.Num() - 1);
+		int bulletIndex = FMath::Clamp(bulletType, 0, Magazine->BulletClasses.Num() - 1);
 		if (Magazine->BulletClasses.IsValidIndex(bulletIndex)) {
 			TSubclassOf<AActor> bulletClass = Magazine->BulletClasses[bulletIndex];
 			if (IsValid(bulletClass)) {
@@ -343,7 +350,7 @@ int AModularFirearm::GetReserveAmmo_Implementation() const {
 FActiveGameplayEffectHandle AModularFirearm::ApplyGameplayEffectToFirearm(TSubclassOf<UGameplayEffect> gameplayEffectClass, int level, const FGameplayEffectContextHandle& effectContext) {
 	if (!IsValid(AbilitySystem)) {
 		UE_LOG(LogModularFirearm, Warning, TEXT("Attempted to apply a Gameplay Effect to firearm, but no Ability System was present."));
-		return;
+		return FActiveGameplayEffectHandle();
 	}
 	UGameplayEffect* effect = NewObject<UGameplayEffect>(GetWorld(), gameplayEffectClass);
 	auto predictionKey = AbilitySystem->GetPredictionKeyForNewAction();
@@ -352,8 +359,9 @@ FActiveGameplayEffectHandle AModularFirearm::ApplyGameplayEffectToFirearm(TSubcl
 FActiveGameplayEffectHandle AModularFirearm::ApplyGameplayEffectSpecToFirearm(const FGameplayEffectSpec& gameplayEffectSpec) {
 	if (!IsValid(AbilitySystem)) {
 		UE_LOG(LogModularFirearm, Warning, TEXT("Attempted to apply a Gameplay Effect to firearm, but no Ability System was present."));
-		return;
+		return FActiveGameplayEffectHandle();
 	}
+
 	auto predictionKey = AbilitySystem->GetPredictionKeyForNewAction();
 	return AbilitySystem->ApplyGameplayEffectSpecToSelf(gameplayEffectSpec, predictionKey);
 }
@@ -510,21 +518,76 @@ void AModularFirearm::OnConstruction(const FTransform& Transform) {
 
 		AbilitySystem = Cast<UAbilitySystemComponent>(AddComponentByClass(AbilitySystemClass, true, FTransform(), false));
 		if (IsValid(AbilitySystem)) {
+			AbilitySystem->SetIsReplicated(true);
 			AttributeSet = NewObject<UModularFirearmAttributeSet>(AbilitySystem, AttributeSetClass, "Modular Firearm Attribute Set");
-			AbilitySystem->AddAttributeSetSubobject<UModularFirearmAttributeSet>(AttributeSet);
+			if (IsValid(AttributeSet)) {
+				AbilitySystem->AddAttributeSetSubobject<UModularFirearmAttributeSet>(AttributeSet);
+			}
 		}
 	}
 }
 void AModularFirearm::BeginPlay() {
 	Super::BeginPlay();
-	if (HasAuthority() && bStartWithWeaponLoaded) {
-		bBulletChambered = true;
-		CurrentMagazineAmmo = GetMaxAmmo() - 1;
-	}
 	if (IsValid(ReceiverMesh)) {
 		if (UAnimInstance* animInst = ReceiverMesh->GetAnimInstance()) {
 			animInst->OnMontageEnded.AddDynamic(this, &AModularFirearm::OnReceiverMontageEnded);
 		}
+	}
+
+	if (IsValid(AbilitySystem) && IsValid(AttributeSet)) {
+		/* Setup the Receiver attributes */ {
+				// Create the effect and make it instant. We want this to modify base values.
+			UGameplayEffect* effect = NewObject<UGameplayEffect>(AttributeSet, UGameplayEffect::StaticClass());
+			effect->DurationPolicy = EGameplayEffectDurationType::Instant;
+
+			// Add Multishot
+			FGameplayModifierInfo DefaultFireRate_Modifier;
+			DefaultFireRate_Modifier.Attribute = AttributeSet->GetFireRateAttribute();
+			DefaultFireRate_Modifier.ModifierOp = EGameplayModOp::Override;
+			DefaultFireRate_Modifier.ModifierMagnitude = FGameplayEffectModifierMagnitude(FScalableFloat(DefaultFireRate));
+			effect->Modifiers.Add(DefaultFireRate_Modifier);
+
+			// Add Fire Rate
+			FGameplayModifierInfo Multishot_Modifier;
+			Multishot_Modifier.Attribute = AttributeSet->GetMultishotAttribute();
+			Multishot_Modifier.ModifierOp = EGameplayModOp::Override;
+			Multishot_Modifier.ModifierMagnitude = FGameplayEffectModifierMagnitude(FScalableFloat(DefaultMultishot));
+			effect->Modifiers.Add(Multishot_Modifier);
+
+			// Add Burst Speed
+			FGameplayModifierInfo BurstSpeed_Modifier;
+			BurstSpeed_Modifier.Attribute = AttributeSet->GetBurstSpeedAttribute();
+			BurstSpeed_Modifier.ModifierOp = EGameplayModOp::Override;
+			BurstSpeed_Modifier.ModifierMagnitude = FGameplayEffectModifierMagnitude(FScalableFloat(DefaultBurstSpeed));
+			effect->Modifiers.Add(BurstSpeed_Modifier);
+
+			// Add Burst Amount
+			FGameplayModifierInfo BurstAmount_Modifier;
+			BurstAmount_Modifier.Attribute = AttributeSet->GetBurstAmountAttribute();
+			BurstAmount_Modifier.ModifierOp = EGameplayModOp::Override;
+			BurstAmount_Modifier.ModifierMagnitude = FGameplayEffectModifierMagnitude(FScalableFloat(DefaultBurstAmount));
+			effect->Modifiers.Add(BurstAmount_Modifier);
+
+			FGameplayEffectContextHandle context = AbilitySystem->MakeEffectContext();
+
+			ApplyGameplayEffectSpecToFirearm(FGameplayEffectSpec(effect, context, 1));
+		}
+
+		for (int i = 0; i < EFirearmComponentType::Num; i++) {
+			UGunPartDataBase* part = GetPartData(EFirearmComponentType(i));
+			if (IsValid(part)) {
+				UGameplayEffect* effect = part->MakeEffect(AttributeSet);
+				if (IsValid(effect)) {
+					auto context = AbilitySystem->MakeEffectContext();
+					ApplyGameplayEffectSpecToFirearm(FGameplayEffectSpec(effect, context));
+				}
+			}
+		}
+	}
+
+	if (HasAuthority() && bStartWithWeaponLoaded) {
+		bBulletChambered = true;
+		CurrentMagazineAmmo = GetMaxAmmo() - 1;
 	}
 }
 void AModularFirearm::GetLifetimeReplicatedProps(TArray< FLifetimeProperty >& OutLifetimeProps) const {
@@ -574,9 +637,14 @@ void AModularFirearm::SetComponent(const EFirearmComponentType& componentType, U
 		else {
 			modifiedComp->SetStaticMesh(nullptr);
 		}
-		ApplyGameplayEffectSpecToFirearm(newComponent->GetEffect());
+		if (IsValid(AbilitySystem) && IsValid(AttributeSet)) {
+			UGameplayEffect* effect = newComponent->MakeEffect(AttributeSet);
+			if (IsValid(effect)) {
+				auto context = AbilitySystem->MakeEffectContext();
+				ApplyGameplayEffectSpecToFirearm(FGameplayEffectSpec(effect, context));
+			}
+		}		
 	}
-
 }
 void AModularFirearm::SetComponentSkin(const EFirearmComponentType& componentType, const FString& skinName) {
 	if (!HasAuthority() && !GetIsReplicated()) {

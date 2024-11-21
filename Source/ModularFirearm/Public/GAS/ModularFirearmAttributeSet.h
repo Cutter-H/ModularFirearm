@@ -1,9 +1,10 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+// Cutter Hodnett // 2024-
 
 #pragma once
 
 #include "CoreMinimal.h"
 #include "AttributeSet.h"
+#include "AbilitySystemComponent.h"
 #include "ModularFirearmAttributeSet.generated.h"
 
 #define ATTRIBUTE_ACCESSORS(ClassName, PropertyName) \
@@ -16,8 +17,7 @@
  * 
  */
 UCLASS()
-class MODULARFIREARM_API UModularFirearmAttributeSet : public UAttributeSet
-{
+class MODULARFIREARM_API UModularFirearmAttributeSet : public UAttributeSet {
 	GENERATED_BODY()
 public:
 #pragma region Attribute Accessors
@@ -35,31 +35,32 @@ public:
 	ATTRIBUTE_ACCESSORS(UModularFirearmAttributeSet, BurstAmount);
 #pragma endregion
 protected:
+	virtual void GetLifetimeReplicatedProps(TArray< FLifetimeProperty >&OutLifetimeProps) const override;
 #pragma region OnRep Functions
 	UFUNCTION()
-	virtual void OnRep_SpreadMultiplier(const FGameplayAttributeData& oldAttribute) const;
+	virtual void OnRep_SpreadMultiplier(const FGameplayAttributeData& oldAttribute) const {}
 	UFUNCTION()
-	virtual void OnRep_Noise(const FGameplayAttributeData& oldAttribute) const;
+	virtual void OnRep_Noise(const FGameplayAttributeData& oldAttribute) const {}
 	UFUNCTION()
-	virtual void OnRep_RecoilMultiplier(const FGameplayAttributeData& oldAttribute) const;
+	virtual void OnRep_RecoilMultiplier(const FGameplayAttributeData& oldAttribute) const {}
 	UFUNCTION()
-	virtual void OnRep_HapticIntensity(const FGameplayAttributeData& oldAttribute) const;
+	virtual void OnRep_HapticIntensity(const FGameplayAttributeData& oldAttribute) const {}
 	UFUNCTION()
-	virtual void OnRep_MaxAmmo(const FGameplayAttributeData& oldAttribute) const;
+	virtual void OnRep_MaxAmmo(const FGameplayAttributeData& oldAttribute) const {}
 	UFUNCTION()
-	virtual void OnRep_ReloadSpeed(const FGameplayAttributeData& oldAttribute) const;
+	virtual void OnRep_ReloadSpeed(const FGameplayAttributeData& oldAttribute) const {}
 	UFUNCTION()
-	virtual void OnRep_FOVZoom(const FGameplayAttributeData& oldAttribute) const;
+	virtual void OnRep_FOVZoom(const FGameplayAttributeData& oldAttribute) const {}
 	UFUNCTION()
-	virtual void OnRep_SwapSpeed(const FGameplayAttributeData& oldAttribute) const;
+	virtual void OnRep_SwapSpeed(const FGameplayAttributeData& oldAttribute) const {}
 	UFUNCTION()
-	virtual void OnRep_Multishot(const FGameplayAttributeData& oldAttribute) const;
+	virtual void OnRep_Multishot(const FGameplayAttributeData& oldAttribute) const {}
 	UFUNCTION()
-	virtual void OnRep_FireRate(const FGameplayAttributeData& oldAttribute) const;
+	virtual void OnRep_FireRate(const FGameplayAttributeData& oldAttribute) const {}
 	UFUNCTION()
-	virtual void OnRep_BurstSpeed(const FGameplayAttributeData& oldAttribute) const;
+	virtual void OnRep_BurstSpeed(const FGameplayAttributeData& oldAttribute) const {}
 	UFUNCTION()
-	virtual void OnRep_BurstAmount(const FGameplayAttributeData& oldAttribute) const;
+	virtual void OnRep_BurstAmount(const FGameplayAttributeData& oldAttribute) const {}
 #pragma endregion
 private:
 #pragma region Attributes

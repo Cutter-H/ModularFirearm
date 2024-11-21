@@ -1,9 +1,10 @@
-// Cutter Hodnett // 2024
+// Cutter Hodnett // 2024-
 
 #pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "GameplayEffectTypes.h"
 #include "ModularFirearmDataAssets.h"
 #include "Gun.generated.h"
 
@@ -80,16 +81,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
 	FTransform GetMuzzleTransform() const;
 	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
-	TSubclassOf<AActor> GetBulletClass() const;
+	TSubclassOf<AActor> GetBulletClass(int bulletType = 0) const;
 	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
 	float GetReloadSpeedModifier() const;
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Firearm|Getters")
 	int GetReserveAmmo() const;
 	UFUNCTION(BlueprintImplementableEvent, BlueprintCallable, BlueprintAuthorityOnly, Category = "Firearm|Setters")
 	void SetReserveAmmo(int newReserveAmmo);
-	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Firearm|Getters")
-	float GetScalingAttribute() const;
-	float GetScalingAttribute_Implementation() const { return 1.f; }
 
 	UFUNCTION(BlueprintCallable, Category = "Firearm|Getters")
 	UNiagaraSystem* GetMuzzleFlash() const;
@@ -220,7 +218,7 @@ private:
 	UFUNCTION(Server, Reliable)
 	void ReloadOnServer(bool start = true);
 	UFUNCTION(Server, Reliable)
-	void SpawnBullet(const FVector& targetLocation);
+	void SpawnBullet(const FVector& targetDirection);
 	UFUNCTION()
 	void OnRep_CurrentAmmo();
 	UFUNCTION()
@@ -258,13 +256,6 @@ private:
 	TArray<UMeshComponent*> PartMeshes;
 #pragma endregion
 #pragma region Component Data
-	FActiveGameplayEffectHandle MuzzleEffect;
-	FActiveGameplayEffectHandle BarrelEffect;
-	FActiveGameplayEffectHandle GripEffect;
-	FActiveGameplayEffectHandle MagazineEffect; 
-	FActiveGameplayEffectHandle SightEffect;
-	FActiveGameplayEffectHandle StockEffect;
-
 	UPROPERTY(EditDefaultsOnly, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleGun", EditConditionHides, DisplayThumbnail = "false"), Replicated, ReplicatedUsing = OnRep_Muzzle)
 	TObjectPtr<UGunBarrelData> Muzzle;
 	UPROPERTY(EditDefaultsOnly, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleGun", EditConditionHides, DisplayThumbnail = "false"), Replicated, ReplicatedUsing = OnRep_Barrel)
@@ -300,17 +291,6 @@ private:
 		case 5: return Stock;
 		case 6: return Muzzle;
 		default: return nullptr;
-		}
-	}
-	FActiveGameplayEffectHandle& GetEffect(const EFirearmComponentType& componentType) {
-		switch (componentType) {
-		case 1: return BarrelEffect;
-		case 2: return GripEffect;
-		case 3: return MagazineEffect;
-		case 4: return SightEffect;
-		case 5: return StockEffect;
-		case 6: return MuzzleEffect;
-		default: return;
 		}
 	}
 	bool SetPartBaseData(UGunPartDataBase* part) {

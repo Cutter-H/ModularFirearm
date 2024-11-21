@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+// Cutter Hodnett // 2024-
 
 using UnrealBuildTool;
 
