@@ -626,7 +626,7 @@ void AModularFirearm::GetLifetimeReplicatedProps(TArray< FLifetimeProperty >& Ou
 }
 #pragma endregion
 #pragma region Customization
-bool AModularFirearm::SetModularPart(const EFirearmComponentType& componentType, UGunPartDataBase* newComponent, int level) {
+bool AModularFirearm::SetModularPart(EFirearmComponentType componentType, UGunPartDataBase* newComponent, int level) {
 	if (bUseSimpleFirearm) {
 		UE_LOG(LogModularFirearm, Warning, TEXT("Attempted to use modular features with UseSimpleFirearm enabled."));
 		return false;
@@ -669,7 +669,7 @@ bool AModularFirearm::SetModularPart(const EFirearmComponentType& componentType,
 	}
 	return true;
 }
-bool AModularFirearm::SetModularPartSkin(const EFirearmComponentType& componentType, const FString& skinName) {
+bool AModularFirearm::SetModularPartSkin(EFirearmComponentType componentType, const FString& skinName) {
 	if (!HasAuthority() && !GetIsReplicated()) {
 		SetComponentSkinOnServer(componentType, skinName);
 		return false;

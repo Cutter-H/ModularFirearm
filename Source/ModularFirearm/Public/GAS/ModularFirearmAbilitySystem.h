@@ -4,11 +4,12 @@
 
 #include "CoreMinimal.h"
 #include "AbilitySystemComponent.h"
+#include "Components/ActorComponent.h"
 #include "ModularFirearmAbilitySystem.generated.h"
 
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
-class MODULARFIREARM_API UModularFirearmAbilitySystem : public UAbilitySystemComponent {
+class MODULARFIREARM_API UModularFirearmAbilitySystem : public UActorComponent {
 	GENERATED_BODY()
 
 public:

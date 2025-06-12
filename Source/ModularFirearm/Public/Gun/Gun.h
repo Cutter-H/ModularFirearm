@@ -50,22 +50,38 @@ public:
 	FOnPlayAnimationSignature OnReloadMontageStop;
 #pragma endregion
 #pragma region Interface Overrides
-	
+
+	UFUNCTION()
 	virtual AModularFirearm* AsModularFirearm() override {return this;}
-	virtual bool SetModularPart(const EFirearmComponentType& componentType, UGunPartDataBase* newComponent, int level = 1) override;
-	virtual bool SetModularPartSkin(const EFirearmComponentType& componentType, const FString& skinName) override;
+	UFUNCTION()
+	virtual bool SetModularPart(EFirearmComponentType componentType, UGunPartDataBase* part, int level = 1) override;
+	UFUNCTION()
+	virtual bool SetModularPartSkin(EFirearmComponentType componentType, const FString& skinName) override;
+	UFUNCTION()
 	virtual void StartFiring() override;
+	UFUNCTION()
 	virtual void StopFiring() override;
+	UFUNCTION()
 	virtual void Reload() override;
+	UFUNCTION()
 	virtual void StopReloading() override;
+	UFUNCTION()
 	virtual void LoadNewMagazine(bool bFreeFill = false) override;
+	UFUNCTION()
 	virtual FModularFirearmStats GetStats() const override;
+	UFUNCTION()
 	virtual UGunBarrelData* GetBarrel() const override {return Barrel;}
+	UFUNCTION()
 	virtual UGunMuzzleData* GetMuzzle() const override {return Muzzle;}
+	UFUNCTION()
 	virtual UGunGripData* GetGrip() const override {return Grip;}
+	UFUNCTION()
 	virtual UGunMagazineData* GetMagazine() const override {return Magazine;}
+	UFUNCTION()
 	virtual UGunSightData* GetSight() const override {return Sight;}
+	UFUNCTION()
 	virtual UGunStockData* GetStock() const override {return Stock;}
+	
 	
 #pragma endregion
 #pragma region Getters/Setters
