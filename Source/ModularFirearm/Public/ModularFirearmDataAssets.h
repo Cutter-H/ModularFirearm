@@ -17,14 +17,12 @@ enum EFirearmComponentType : uint8{
 	Muzzle		=	6,
 	Num			=	7	UMETA(Hidden)
 };
-
 UENUM(BlueprintType)
 enum EFiringMode {
 	Automatic,
 	SemiAutomatic,
 	Burst
 };
-
 UENUM(BlueprintType)
 enum ETargetingMode{
 	FocalPoint,
@@ -47,7 +45,7 @@ public:
 	* The different materials that can be set for this part.
 	* The material is changed on slot 0.
 	*/UPROPERTY(EditAnywhere, Category = "GunPart", meta = (DisplayPriority = 1))
-	TMap<FString, UMaterialInterface*> ReceiverSkins;
+	TMap<FString, UMaterialInterface*> Skins;
 	/*
 	* Where on the receiver is this part attached.
 	* Muzzle parts will attempt to attach to the barrel, but will fall back to the reciever.
