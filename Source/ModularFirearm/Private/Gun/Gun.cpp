@@ -217,22 +217,26 @@ void AModularFirearm::LoadNewMagazine(bool bFreeFill) {
 	}
 }
 
-FModularFirearmStats AModularFirearm::GetStats() const {
-	FModularFirearmStats stats;
+FModularFirearmAmmo AModularFirearm::GetAmmo() const {
+	FModularFirearmAmmo stats;
 	stats.CurrentAmmo = GetCurrentAmmo();
 	stats.MaxAmmo = GetMaxAmmo();
 	stats.ReserveAmmo = GetReserveAmmo();
-	stats.BulletSpread = GetBulletSpread(VolleyBulletCount);
-	stats.Noise = GetNoise();
-	stats.FireRate = GetFireRate();
-	stats.HapticIntensity = GetHapticIntensity();
-	stats.CamShakeIntensity = GetCamShakeIntensity();
-	stats.Multishot = GetMultishot();
-	stats.BurstSpeed = GetBurstSpeed();
-	stats.BurstAmount = GetBurstAmount();
-	stats.ReloadSpeedMultiplier = GetReloadSpeedModifier();
 	return stats;
 }
+
+float AModularFirearm::GetAttribute(FGameplayAttribute attribute) const {
+	if (!attribute.IsValid()) { return -1.0; }
+	
+	bool found = false;
+	float val = AbilitySystem->GetGameplayAttributeValue(attribute, found);
+	if (found) {
+		return val;
+	}
+	UE_LOG(LogModularFirearm, Warning, TEXT("Failed to find attribute %s on %s."), *attribute.AttributeName, *GetNameSafe(this));
+	return -1.f;
+}
+
 #pragma endregion
 #pragma region Getters/Setters
 int AModularFirearm::GetMaxAmmo_Implementation() const {
@@ -326,7 +330,7 @@ TSubclassOf<AActor> AModularFirearm::GetBulletClass_Implementation(int bulletTyp
 	if (IsValid(Magazine)) {
 		int bulletIndex = FMath::Clamp(bulletType, 0, Magazine->BulletClasses.Num() - 1);
 		if (Magazine->BulletClasses.IsValidIndex(bulletIndex)) {
-			TSubclassOf<AActor> bulletClass = Magazine->BulletClasses[bulletIndex];
+			TSubclassOf<AActor> bulletClass = Magazine->BulletClasses[bulletIndex].Get();
 			if (IsValid(bulletClass)) {
 				return bulletClass;
 			}
@@ -340,7 +344,7 @@ float AModularFirearm::GetReloadSpeedModifier_Implementation() const {
 	}
 	return 1.0f;
 }
-UNiagaraSystem* AModularFirearm::GetMuzzleFlash_Implementation() const {
+TSoftObjectPtr<UNiagaraSystem> AModularFirearm::GetMuzzleFlash_Implementation() const {
 	if (IsValid(Muzzle)) {
 		return Muzzle->MuzzleFlash;
 	}
@@ -349,7 +353,7 @@ UNiagaraSystem* AModularFirearm::GetMuzzleFlash_Implementation() const {
 	}
 	return DefaultMuzzleFlash;
 }
-USoundBase* AModularFirearm::GetFiringSound_Implementation() const {
+TSoftObjectPtr<USoundBase> AModularFirearm::GetFiringSound_Implementation() const {
 	if (IsValid(Muzzle)) {
 		return Muzzle->GetFiringSound();
 	}
@@ -358,7 +362,7 @@ USoundBase* AModularFirearm::GetFiringSound_Implementation() const {
 	}
 	return DefaultFiringSound;
 }
-UAnimMontage* AModularFirearm::GetReloadMontage_Implementation() {
+TSoftObjectPtr<UAnimMontage> AModularFirearm::GetReloadMontage_Implementation() {
 	if (IsValid(Magazine)) {
 		return Magazine->GetReloadMontage();
 	}

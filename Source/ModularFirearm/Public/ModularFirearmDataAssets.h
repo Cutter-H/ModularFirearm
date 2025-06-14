@@ -4,7 +4,11 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
+#include "Engine/StreamableManager.h"
 #include "ModularFirearmDataAssets.generated.h"
+
+class UGameplayEffect;
+class UModularFirearmAttributeSet;
 
 UENUM(BlueprintType)
 enum EFirearmComponentType : uint8{
@@ -29,6 +33,7 @@ enum ETargetingMode{
 	DirectionOfMuzzle,
 	CursorLocation
 };
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnGunPartAssetsLoaded, UGunPartDataBase*, parData);
 /*
  *
  */
@@ -37,15 +42,17 @@ class MODULARFIREARM_API UGunPartDataBase : public UDataAsset
 {
 	GENERATED_BODY()
 public:
+	UPROPERTY(BlueprintAssignable, Category = "GunPart")
+	FOnGunPartAssetsLoaded OnGunPartAssetsLoaded;
 	/*
 	* Mesh of the part.
 	*/UPROPERTY(EditAnywhere, Category = "GunPart", meta = (DisplayPriority = 1))
-	TObjectPtr<UStaticMesh> Mesh;
+	TSoftObjectPtr<UStaticMesh> Mesh;
 	/*
 	* The different materials that can be set for this part.
 	* The material is changed on slot 0.
 	*/UPROPERTY(EditAnywhere, Category = "GunPart", meta = (DisplayPriority = 1))
-	TMap<FString, UMaterialInterface*> Skins;
+	TMap<FString, TSoftObjectPtr<UMaterialInterface>> Skins;
 	/*
 	* Where on the receiver is this part attached.
 	* Muzzle parts will attempt to attach to the barrel, but will fall back to the reciever.
@@ -56,7 +63,13 @@ public:
 	* Make the effect for the part 
 	*/UFUNCTION(BlueprintCallable, Category = "GunPart|GAS")
 	virtual UGameplayEffect* MakeEffect(UModularFirearmAttributeSet* attributes) const;
-
+	/*
+	 * Returns false if all assets are already loaded.
+	 */UFUNCTION(BlueprintCallable, Category = "GunPart")
+	virtual void LoadAssets();
+protected:
+	UFUNCTION()
+	virtual TArray<FSoftObjectPath> GetAssetPaths() const;
 };
 UCLASS(meta = (PrioritizeCategories = "Gun Part"))
 class MODULARFIREARM_API UGunBarrelData : public UGunPartDataBase
@@ -76,11 +89,11 @@ public:
 	/*
 	* Niagara system when firing.
 	*/UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
-	class UNiagaraSystem* MuzzleFlash;
+	TSoftObjectPtr<class UNiagaraSystem> MuzzleFlash;
 	/*
 	* Audio played when firing.
 	*/UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
-	USoundBase* DefaultFiringSound;
+	TSoftObjectPtr<USoundBase> DefaultFiringSound;
 	/*
 	* For AI Noise
 	*/UPROPERTY(EditAnywhere, Category = "Barrel", meta = (DisplayPriority = 2))
@@ -88,8 +101,8 @@ public:
 	/*
 	* Function for randomization or logic to be added when grabbing sound.
 	*/UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Firearm Data")
-	USoundBase* GetFiringSound() const;
-	USoundBase* GetFiringSound_Implementation() const { return DefaultFiringSound; }
+	TSoftObjectPtr<USoundBase> GetFiringSound() const;
+	TSoftObjectPtr<USoundBase> GetFiringSound_Implementation() const { return DefaultFiringSound; }
 
 	UFUNCTION(BlueprintCallable, Category = "FirearmData")
 	float GetVolleySpread(float volleyCount) const {
@@ -99,6 +112,8 @@ public:
 		return 0.f;
 	}
 	virtual UGameplayEffect* MakeEffect(UModularFirearmAttributeSet* attributes) const override;
+protected:
+	virtual TArray<FSoftObjectPath> GetAssetPaths() const;
 };
 /* This class is effectively empty. This was created for a clear distinction of Barrel and Muzzle. Muzzle variables override the equipped Barrel variables. */
 UCLASS(meta = (PrioritizeCategories = "Gun Part"))
@@ -122,7 +137,12 @@ public:
 	*/UPROPERTY(EditAnywhere, Category = "Grip", meta = (DisplayPriority = 2))
 	float HapticIntensity = 1.f;
 	virtual UGameplayEffect* MakeEffect(UModularFirearmAttributeSet* attributes) const override;
+protected:
+	virtual TArray<FSoftObjectPath> GetAssetPaths() const override;
 };
+
+
+
 UCLASS(meta = (PrioritizeCategories = "Gun Part"))
 class MODULARFIREARM_API UGunMagazineData : public UGunPartDataBase
 {
@@ -130,20 +150,23 @@ class MODULARFIREARM_API UGunMagazineData : public UGunPartDataBase
 public:
 	UGunMagazineData() { AttachSocketName = "Magazine"; }
 	UPROPERTY(EditAnywhere, Category = "Magazine", meta = (DisplayPriority = 2))
-	TArray<TSubclassOf<AActor>> BulletClasses;
+	TArray<TSoftClassPtr<AActor>> BulletClasses;
 	UPROPERTY(EditAnywhere, Category = "Magazine", meta = (DisplayPriority = 2))
 	float MaxAmmo = 30;
 	UPROPERTY(EditAnywhere, Category = "Magazine", meta = (DisplayPriority = 2))
 	float ReloadSpeed = 1;
 	UPROPERTY(EditAnywhere, Category = "Magazine", meta = (DisplayPriority = 2))
-	UAnimMontage* DefaultReloadMontage;
+	TSoftObjectPtr<UAnimMontage> DefaultReloadMontage;
 	/* Created function so randomization or logic can be added when grabbing montage. */
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Firearm Data")
-	UAnimMontage* GetReloadMontage() const;
-	UAnimMontage* GetReloadMontage_Implementation() const { return DefaultReloadMontage; }
+	TSoftObjectPtr<UAnimMontage> GetReloadMontage() const;
+	TSoftObjectPtr<UAnimMontage> GetReloadMontage_Implementation() const { return DefaultReloadMontage; }
 
 	virtual UGameplayEffect* MakeEffect(UModularFirearmAttributeSet* attributes) const override;
+protected:
+	virtual TArray<FSoftObjectPath> GetAssetPaths() const override;
 };
+
 UCLASS(meta = (PrioritizeCategories = "Gun Part"))
 class MODULARFIREARM_API UGunSightData : public UGunPartDataBase
 {
@@ -155,6 +178,7 @@ public:
 
 	virtual UGameplayEffect* MakeEffect(UModularFirearmAttributeSet* attributes) const override;
 };
+
 UCLASS(meta = (PrioritizeCategories = "Gun Part"))
 class MODULARFIREARM_API UGunStockData : public UGunPartDataBase
 {
@@ -162,12 +186,14 @@ class MODULARFIREARM_API UGunStockData : public UGunPartDataBase
 public:
 	UGunStockData() { AttachSocketName = "Stock"; }
 	UPROPERTY(EditAnywhere, Category = "Stock", meta = (DisplayPriority = 2))
-	TSubclassOf<UCameraShakeBase> CamShake;
+	TSoftClassPtr<UCameraShakeBase> CamShake;
 	UPROPERTY(EditAnywhere, Category = "Stock", meta = (DisplayPriority = 2))
 	float CamShakeIntensity = 1.f;
 	UPROPERTY(EditAnywhere, Category = "Stock", meta = (DisplayPriority = 2))
 	float SwapSpeed = 1.f;
 	
 	virtual UGameplayEffect* MakeEffect(UModularFirearmAttributeSet* attributes) const override;
+protected:
+	virtual TArray<FSoftObjectPath> GetAssetPaths() const override;
 };
 

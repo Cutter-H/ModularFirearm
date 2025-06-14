@@ -68,7 +68,9 @@ public:
 	UFUNCTION()
 	virtual void LoadNewMagazine(bool bFreeFill = false) override;
 	UFUNCTION()
-	virtual FModularFirearmStats GetStats() const override;
+	virtual FModularFirearmAmmo GetAmmo() const override;
+	UFUNCTION()
+	virtual float GetAttribute(FGameplayAttribute attribute) const override;
 	UFUNCTION()
 	virtual UGunBarrelData* GetBarrel() const override {return Barrel;}
 	UFUNCTION()
@@ -121,11 +123,11 @@ public:
 	void SetReserveAmmo(int newReserveAmmo);
 
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Firearm|Getters")
-	UNiagaraSystem* GetMuzzleFlash() const;
+	TSoftObjectPtr<UNiagaraSystem> GetMuzzleFlash() const;
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Firearm|Getters")
-	USoundBase* GetFiringSound() const;
+	TSoftObjectPtr<USoundBase> GetFiringSound() const;
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Firearm|Getters")
-	UAnimMontage* GetReloadMontage();
+	TSoftObjectPtr<UAnimMontage> GetReloadMontage();
 
 
 

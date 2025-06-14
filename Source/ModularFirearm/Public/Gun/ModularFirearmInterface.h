@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "AttributeSet.h"
 #include "UObject/Interface.h"
 #include "ModularFirearmDataAssets.h"
 #include "ModularFirearmInterface.generated.h"
@@ -16,34 +17,17 @@ class UGunMuzzleData;
 class AModularFirearm;
 
 USTRUCT(BlueprintType)
-struct FModularFirearmStats {
+struct FModularFirearmAmmo {
 	GENERATED_BODY()
 
+	FModularFirearmAmmo(){}
+	
 	UPROPERTY(BlueprintReadWrite)
-	int CurrentAmmo;
+	int CurrentAmmo = -1;
 	UPROPERTY(BlueprintReadWrite)
-	int MaxAmmo;
+	int MaxAmmo = -1;
 	UPROPERTY(BlueprintReadWrite)
-	int ReserveAmmo;
-	UPROPERTY(BlueprintReadWrite)
-	float BulletSpread;
-	UPROPERTY(BlueprintReadWrite)
-	float Noise;
-	UPROPERTY(BlueprintReadWrite)
-	float FireRate;
-	UPROPERTY(BlueprintReadWrite)
-	float HapticIntensity;
-	UPROPERTY(BlueprintReadWrite)
-	float CamShakeIntensity;
-	UPROPERTY(BlueprintReadWrite)
-	float Multishot;
-	UPROPERTY(BlueprintReadWrite)
-	float BurstSpeed;
-	UPROPERTY(BlueprintReadWrite)
-	int BurstAmount;
-	UPROPERTY(BlueprintReadWrite)
-	float ReloadSpeedMultiplier;
-
+	int ReserveAmmo = -1;
 	
 };
 
@@ -78,8 +62,11 @@ public:
 	virtual bool SetModularPartSkin(EFirearmComponentType componentType, const FString& skinName) {return false;}
 	
 	UFUNCTION(BlueprintCallable, Category = "Firearm")
-	virtual FModularFirearmStats GetStats() const {return FModularFirearmStats();}
+	virtual FModularFirearmAmmo GetAmmo() const {return FModularFirearmAmmo();}
 
+	UFUNCTION(BlueprintCallable, Category = "Firearm")
+	virtual float GetAttribute(FGameplayAttribute attribute) const {return -1;}
+	
 
 	/*
 	* Starts firing the weapon.

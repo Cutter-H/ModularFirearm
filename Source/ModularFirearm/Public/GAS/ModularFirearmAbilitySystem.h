@@ -9,7 +9,7 @@
 
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
-class MODULARFIREARM_API UModularFirearmAbilitySystem : public UActorComponent {
+class MODULARFIREARM_API UModularFirearmAbilitySystem : public UAbilitySystemComponent {
 	GENERATED_BODY()
 
 public:
@@ -22,6 +22,6 @@ protected:
 
 public:
 	// Called every frame
-	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
-	                           FActorComponentTickFunction* ThisTickFunction) override;
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	
 };

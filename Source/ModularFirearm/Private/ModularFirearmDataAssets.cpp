@@ -2,10 +2,36 @@
 
 
 #include "ModularFirearmDataAssets.h"
+#include "Engine/AssetManager.h"
 #include "GAS/ModularFirearmAttributeSet.h"
 
 UGameplayEffect* UGunPartDataBase::MakeEffect(UModularFirearmAttributeSet* attributes) const {
     return nullptr;
+}
+
+void UGunPartDataBase::LoadAssets() {
+    FStreamableManager& streamableManager = UAssetManager::GetStreamableManager();
+    int count = 0;
+    int totalCount = GetAssetPaths().Num();
+   for (const auto& path : GetAssetPaths()) {
+       streamableManager.RequestAsyncLoad(
+       path, [this, &count, totalCount]() {
+           if (++count >= totalCount) { // This SHOULD work. It should hit true when the final asset is loaded.
+               OnGunPartAssetsLoaded.Broadcast(this);
+           }
+       }
+       );   
+   }
+}
+
+TArray<FSoftObjectPath> UGunPartDataBase::GetAssetPaths() const {
+    TArray<FSoftObjectPath> assetPaths;
+    assetPaths.Add(Mesh.ToSoftObjectPath());
+    TArray<TSoftObjectPtr<UMaterialInterface>> skins; Skins.GenerateValueArray(skins);
+    for (const TSoftObjectPtr<UMaterialInterface>& mat : skins) {
+        assetPaths.Add(mat.ToSoftObjectPath());
+    }
+    return assetPaths;
 }
 
 UGameplayEffect* UGunBarrelData::MakeEffect(UModularFirearmAttributeSet* attributes) const {
@@ -37,6 +63,13 @@ UGameplayEffect* UGunBarrelData::MakeEffect(UModularFirearmAttributeSet* attribu
     return nullptr;
 }
 
+TArray<FSoftObjectPath> UGunBarrelData::GetAssetPaths() const {
+     TArray<FSoftObjectPath> paths = Super::GetAssetPaths();
+    paths.Add(MuzzleFlash.ToSoftObjectPath());
+    paths.Add(GetFiringSound().ToSoftObjectPath());
+    return paths;    
+}
+
 UGameplayEffect* UGunGripData::MakeEffect(UModularFirearmAttributeSet* attributes) const {
     if (!IsValid(attributes)) {
         return nullptr;
@@ -57,6 +90,12 @@ UGameplayEffect* UGunGripData::MakeEffect(UModularFirearmAttributeSet* attribute
         return effect;
     }
     return nullptr;
+}
+
+TArray<FSoftObjectPath> UGunGripData::GetAssetPaths() const {
+    TArray<FSoftObjectPath> paths = Super::GetAssetPaths();
+    paths.Add(HapticFeedback.ToSoftObjectPath());
+    return paths;
 }
 
 UGameplayEffect* UGunMagazineData::MakeEffect(UModularFirearmAttributeSet* attributes) const {
@@ -86,6 +125,15 @@ UGameplayEffect* UGunMagazineData::MakeEffect(UModularFirearmAttributeSet* attri
         return effect;
     }    
     return nullptr;
+}
+
+TArray<FSoftObjectPath> UGunMagazineData::GetAssetPaths() const {
+    TArray<FSoftObjectPath> paths = Super::GetAssetPaths();
+    for (const TSoftClassPtr<AActor>& bullet : BulletClasses) {
+        paths.Add(bullet.ToSoftObjectPath());
+    }
+    paths.Add(GetReloadMontage().ToSoftObjectPath());
+    return paths;
 }
 
 UGameplayEffect* UGunSightData::MakeEffect(UModularFirearmAttributeSet* attributes) const {
@@ -136,4 +184,10 @@ UGameplayEffect* UGunStockData::MakeEffect(UModularFirearmAttributeSet* attribut
         return effect;
     }
     return nullptr;
+}
+
+TArray<FSoftObjectPath> UGunStockData::GetAssetPaths() const {
+    TArray<FSoftObjectPath> paths = Super::GetAssetPaths();
+    paths.Add(CamShake.ToSoftObjectPath());
+    return paths;    
 }
