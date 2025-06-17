@@ -4,25 +4,104 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "GameplayEffectTypes.h"
-#include "ModularFirearmDataAssets.h"
 #include "ModularFirearmInterface.h"
+#include "Gun/ModularFirearmTypes.h"
 #include "Gun.generated.h"
 
+class UModularFirearmCustomizationComponent;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAmmoChangeSignature, int, newAmmo);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBulletSpawnSignature, AActor*, newBullet);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPlayAnimationSignature, UAnimMontage*, montage);
 
 class UNiagaraSystem;
-class UModularFirearmAttributeSet;
-class UAbilitySystemComponent;
+class UGunPartDataBase;
+class UGunGripData;
+class UGunMagazineData;
+class UGunMuzzleData;
+class UGunSightData;
+class UGunStockData;
+class UGunBarrelData;
 
+USTRUCT(BlueprintType)
+struct FModularFirearmFiringData{
+	GENERATED_BODY()
+	FModularFirearmFiringData() {}
+	/**
+	 * The firing mode this weapon starts with.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TEnumAsByte<EFiringMode> DefaultFiringMode = EFiringMode::MFFM_Automatic;
+	/**
+	 * Available firing modes this weapon can swap to.
+	 * If only one is available, it's recommended to leave this empty to not allow swapping.
+	 * The default firing mode will always be initially set.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TArray<TEnumAsByte<EFiringMode>> AvailableFiringModes;
+	/**
+	* Increases the number of additional bullets used when firing the weapon. (Useful for shotguns)
+	* Decimal digits determine chance for additiona bullet. Example: 0.1 -> 10% change to fire 1 additional bullet.
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	float Multishot = 0.f;
+	/**
+	* The number of bullets that can be fired per second.
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	float FiringRate = 12.5f;
+	/*
+	* The number of bullets that are fired in the burst volley.
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditCondition = "FiringModes.Contains(EFiringMode::MFFM_Burst)", EditConditionHides))
+	int BurstCount = 3;
+	/**
+	* The fire rate at which the burst volley is fired.
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditCondition = "FiringModes.Contains(EFiringMode::MFFM_Burst)", EditConditionHides))
+	float BurstSpeed = 20.f;	
+};
+
+USTRUCT(BlueprintType)
+struct FModularFirearmTargetingData {
+	GENERATED_BODY()
+	
+	/*
+	* The collision channel used for hit detection for the TargetingModes FocalPoint and CursorLocation.
+	*/
+	UPROPERTY(EditAnywhere, Category = "Firearm|Firing")
+	TEnumAsByte<ECollisionChannel> TargetingChannel = ECollisionChannel::ECC_Visibility;
+	
+	/*
+	* Changes the direction of the bullets when spawning.
+	* FocalPoint:			Targets bullets toward the center of the player's screen or the AI's FocusPoint.
+	* DirectionOfMuzzle:	Targets the bullet directly out of the muzzle. To accomodate, this is combined with the static value of MuzzleOffset.
+	* CursorLocation:		Does a hit under the cursor and targets the bullet to that location.
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Firearm|Firing")
+	TEnumAsByte<ETargetingMode> DefaultTargetingMode = ETargetingMode::MFTM_FocalPoint;
+	/**
+	 * Available TargetingMode this weapon can swap to.
+	 * If only one is available, it's recommended to leave this empty to not allow swapping.
+	 * The default targeting mode will always be initially set.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Firearm|Firing")
+	TArray<TEnumAsByte<ETargetingMode>> AvailableTargetingModes;
+	
+};
 UCLASS(PrioritizeCategories = ("Firearm"))
 class MODULARFIREARM_API AModularFirearm : public AActor, public IModularFirearmInterface
 {
 	GENERATED_BODY()
 	
-public:	
+public:
+	/*
+	* Skin used by default.
+	* Skins are applied to the 0 material slot.
+	*/UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Cosmetics")
+	FString DefaultSkin = "Normal";
+
+	UFUNCTION()
+	UGunPartDataBase* GetPartData(EFirearmComponentType type);
 #pragma region Delegates
 	/*
 	* Called when Current Magazine Ammo or Chambered Bullet are altered.
@@ -53,11 +132,13 @@ public:
 
 	UFUNCTION()
 	virtual AModularFirearm* AsModularFirearm() override {return this;}
-	UFUNCTION()
-	virtual bool SetModularPart(EFirearmComponentType componentType, UGunPartDataBase* part, int level = 1) override;
-	UFUNCTION()
-	virtual bool SetModularPartSkin(EFirearmComponentType componentType, const FString& skinName) override;
-	UFUNCTION()
+	UFUNCTION(Server, Reliable)
+	virtual void SetModularPart(EFirearmComponentType componentType, UGunPartDataBase* part) override;
+	UFUNCTION(Server, Reliable)
+	virtual void SetModularPartSkin(EFirearmComponentType componentType, const FString& skinName) override;
+	UFUNCTION(Server, Reliable)
+	virtual void SetAllSkins(const FString& skinName) override;
+	UFUNCTION(Server, Reliable)
 	virtual void StartFiring() override;
 	UFUNCTION()
 	virtual void StopFiring() override;
@@ -69,8 +150,6 @@ public:
 	virtual void LoadNewMagazine(bool bFreeFill = false) override;
 	UFUNCTION()
 	virtual FModularFirearmAmmo GetAmmo() const override;
-	UFUNCTION()
-	virtual float GetAttribute(FGameplayAttribute attribute) const override;
 	UFUNCTION()
 	virtual UGunBarrelData* GetBarrel() const override {return Barrel;}
 	UFUNCTION()
@@ -127,17 +206,12 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Firearm|Getters")
 	TSoftObjectPtr<USoundBase> GetFiringSound() const;
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Firearm|Getters")
-	TSoftObjectPtr<UAnimMontage> GetReloadMontage();
+	UAnimMontage* GetReloadMontage();
 
 
 
 #pragma endregion
-#pragma region GAS
-	UFUNCTION(BlueprintCallable, Category = "Firearm|GAS")
-	FActiveGameplayEffectHandle ApplyGameplayEffectToFirearm(TSubclassOf<UGameplayEffect> gameplayEffectClass, int level, const FGameplayEffectContextHandle& effectContext = FGameplayEffectContextHandle());
-	UFUNCTION(BlueprintCallable, Category = "Firearm|GAS")
-	FActiveGameplayEffectHandle ApplyGameplayEffectSpecToFirearm(const FGameplayEffectSpec& gameplayEffectSpec);
-#pragma endregion
+	
 protected:
 #pragma region Firearm Variables
 	/*
@@ -147,7 +221,8 @@ protected:
 	/*
 	* If true, a chambered round will be available but not exist in the Magazine. 
 	* For example, reloading a non-empty 30 round magazine will result in 31 current ammo.
-	*/UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm", meta = (ExposeOnSpawn = "true"))
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm", meta = (ExposeOnSpawn = "true"))
 	bool bUsesChamberedRounds = true;
 	/*
 	* If true, the weapon won't fire any play montage's on the receiver, but will still call the montage Dispatchers.
@@ -155,88 +230,55 @@ protected:
 	bool bPlayMontagesFromExternalSource = false;
 	/*
 	*  If true, you cannot modify this weapon with parts. Only with the receiver mesh and this actor.
-	*/UPROPERTY(EditDefaultsOnly, Category = "Firearm|Parts")
+	*/UPROPERTY(EditAnywhere, Category = "Firearm|Parts")
 	bool bUseSimpleFirearm = false;
 	/*
 	* Firing mode for the weapon. This is not replicated as firing is done locally then the bullet is spawned on the server. Afterwards, the effects are replicated.
 	* Automatic:		The weapon will continue firing while until exhausted or StopFiring is called.
 	* SemiAutomatic:	The weapon will fire once per StartFiring call.
 	* Burst:			The weapon will fire a set number of times in quick succession once per StartFiring call.
-	*/UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Firearm|Firing")
+	*/
+	UPROPERTY(BlueprintReadWrite, Category = "Firearm|Firing")
 	TEnumAsByte<EFiringMode> FiringMode;
+	UPROPERTY(EditAnywhere, Category = "Firearm|Firing")
+	FModularFirearmFiringData FiringData;
 	/*
 	* Changes the direction of the bullets when spawning.
 	* FocalPoint:			Targets bullets toward the center of the player's screen or the AI's FocusPoint.
 	* DirectionOfMuzzle:	Targets the bullet directly out of the muzzle. To accomodate, this is combined with the static value of MuzzleOffset.
 	* CursorLocation:		Does a hit under the cursor and targets the bullet to that location.
-	*/UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Firearm|Firing")
+	*/
+	UPROPERTY(BlueprintReadWrite, Category = "Firearm|Firing")
 	TEnumAsByte<ETargetingMode> TargetingMode;
+	UPROPERTY(EditAnywhere, Category = "Firearm|Firing")
+	FModularFirearmTargetingData TargetingData;
 	/*
 	* Utilized when using DirectionOfMuzzle for TargetingMode. This rotation is combined with the rotation of the muzzle.
-	*/UPROPERTY(EditAnywhere, Category = "Firearm|Firing", meta = (EditConditionHides, EditCondition = "TargetingMode==ETargetingMode::DirectionOfMuzzle"))
+	*/
+	UPROPERTY(EditAnywhere, Category = "Firearm|Firing", meta = (EditConditionHides, EditCondition = "TargetingMode==ETargetingMode::DirectionOfMuzzle"))
 	FRotator MuzzleOffset;
 	/*
 	* How many bullets have been fired in the current volley. 
 	* This is iterated after the bullet is fired.
 	* Starts at 0.
-	*/UPROPERTY(BlueprintReadOnly, Category = "Firearm|Firing")
+	*/
+	UPROPERTY(BlueprintReadOnly, Category = "Firearm|Firing")
 	int VolleyBulletCount = 0;
-	/*
-	* The collision channel used for hit detection for the TargetingModes FocalPoint and CursorLocation.
-	*/UPROPERTY(EditAnywhere, Category = "Firearm|Firing")
-	TEnumAsByte<ECollisionChannel> TargetingChannel = ECollisionChannel::ECC_Visibility;
 	/*
 	* This is the socket name for where bullets will be spawned.
 	* Socket is checked on the meshes in this order:
 	* 1: Muzzle Attachment
 	* 2: Barrel Attachment
 	* 3: Receiver
-	*/UPROPERTY(EditAnywhere, Category = "Firearm|Firing")
+	*/
+	UPROPERTY(EditAnywhere, Category = "Firearm|Firing")
 	FName BulletSpawningSocket = "Muzzle";
-	/*
-	* Increases the number of additional bullets used when firing the weapon. (Useful for shotguns)
-	* Decimal digits determine chance for additiona bullet. Example: 0.1 -> 10% change to fire 1 additional bullet.
-	*/UPROPERTY(EditAnywhere, Category = "Firearm|Firing")
-	float DefaultMultishot = 0.f;
-	/*
-	* The number of bullets that can be fired per second.
-	*/UPROPERTY(EditAnywhere, Category = "Firearm|Firing")
-	float DefaultFireRate = 10.f;
-	/*
-	* The fire rate at which the burst volley is fired.
-	*/UPROPERTY(EditAnywhere, Category = "Firearm|Firing|Burst")
-	float DefaultBurstSpeed = 20.f;
-	/*
-	* The number of bullets that are fired in the burst volley.
-	*/UPROPERTY(EditAnywhere, Category = "Firearm|Firing|Burst")
-	int DefaultBurstAmount = 3;
+	
 	/*
 	* If true, only missing ammo will be taken from reserves.
 	* If false, an entire magazine will always be taken from reserves.
 	*/UPROPERTY(EditAnywhere, Category = "Firearm|Reloading")
-	bool bRecycleAmmoOnReload = true;	
-	/*
-	* The class used for the firearm's Ability System Component.
-	*/UPROPERTY(BlueprintReadOnly, Category = "GAS")
-	TSubclassOf<UAbilitySystemComponent> AbilitySystemClass;
-	/*
-	* The class used for the firearm's AttributeSet. This mus be a subclass of ModularFirearmAttributeSet.
-	*/UPROPERTY(BlueprintReadOnly, Category = "GAS")
-	TSubclassOf<UModularFirearmAttributeSet> AttributeSetClass;
-	/*
-	* The currently equipped skins. Saved so that when component swapping occurs the correct skin is applied.
-	*/UPROPERTY(Replicated, meta = (ArraySizeEnum = "EFirearmComponentType"))
-	TArray<FString> ComponentSkins;
-	/*
-	* The firearm's AttributeSet. This mus be a subclass of ModularFirearmAttributeSet.
-	* This component is created during OnConstruction so is not visible in the editor.
-	*/UPROPERTY(BlueprintReadOnly, Category = "GAS")
-	TObjectPtr<UModularFirearmAttributeSet> AttributeSet;
-	/*
-	* The firearm's Ability System Component.
-	* This is created during OnConstruction so is not visible in the editor.
-	*/UPROPERTY(BlueprintReadOnly, Category = "GAS")
-	TObjectPtr<UAbilitySystemComponent> AbilitySystem;
+	bool bRecycleAmmoOnReload = true;
 #pragma endregion
 #pragma region Component Defaults
 	/*
@@ -282,22 +324,18 @@ protected:
 	/*
 	* Multiplier for the VolleySpread.
 	*/UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel+Muzzle")
-	float DefaultSpreadMultiplier = 1.f;
+	float SpreadMultiplier = 1.f;
 	/*
 	* 3D sound played when firing.
 	*/UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel+Muzzle")
-	USoundBase* DefaultFiringSound;
+	TSoftObjectPtr<USoundBase> DefaultFiringSound;
 	/*
 	* Niagara effect played when firing.
 	*/UPROPERTY(EditAnywhere, Category = "Firearm|ComponentFallbacks|Barrel+Muzzle")
-	UNiagaraSystem* DefaultMuzzleFlash;
+	TSoftObjectPtr<UNiagaraSystem> DefaultMuzzleFlash;
 #pragma endregion
-#pragma region Cosmetics
-	/*
-	* Skin used by default.
-	* Skins are applied to the 0 material slot.
-	*/UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm|Cosmetics")
-	FString DefaultSkin = "Normal";
+#pragma region Animation
+	
 	/*
 	* Skins available to the receiver mesh.
 	* Skins are applied to the 0 material slot.
@@ -327,6 +365,7 @@ protected:
 	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray< FLifetimeProperty >& OutLifetimeProps) const override;
+	virtual void PostLoad() override;
 #pragma endregion
 private:
 #pragma region Bullet Functionality
@@ -383,43 +422,39 @@ private:
 #pragma region Replication
 	UFUNCTION(NetMulticast, Reliable)
 	void ReplicateSkinChange(const EFirearmComponentType& componentType, const FString& skinName);
-	UFUNCTION(Server, Reliable)
-	void SetComponentOnServer(const EFirearmComponentType& componentType, UGunPartDataBase* newComponent);
-	UFUNCTION(Server, Reliable)
-	void SetComponentSkinOnServer(const EFirearmComponentType& componentType, const FString& skinName);
-	UFUNCTION()
-	void UpdateSkin(const EFirearmComponentType& componentType, const FString& skinName);
 #pragma endregion
 #pragma region Mesh Components
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<USkeletalMeshComponent> ReceiverMesh;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly,  Category = "Components", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(BlueprintReadOnly,  Category = "Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UStaticMeshComponent> BarrelMesh;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly,  Category = "Components", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(BlueprintReadOnly,  Category = "Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UStaticMeshComponent> GripMesh;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly,  Category = "Components", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(BlueprintReadOnly,  Category = "Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UStaticMeshComponent> MagazineMesh;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly,  Category = "Components", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(BlueprintReadOnly,  Category = "Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UStaticMeshComponent> SightMesh;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly,  Category = "Components", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(BlueprintReadOnly,  Category = "Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UStaticMeshComponent> StockMesh;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly,  Category = "Components", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(BlueprintReadOnly,  Category = "Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UStaticMeshComponent> MuzzleMesh;
 	UPROPERTY()
 	TArray<UMeshComponent*> PartMeshes;
+	UPROPERTY()
+	TObjectPtr<UModularFirearmCustomizationComponent> CustomizationComponent;
 #pragma endregion
 #pragma region Component Data
-	UPROPERTY(EditDefaultsOnly, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleGun", EditConditionHides, DisplayThumbnail = "false"), Replicated, ReplicatedUsing = OnRep_Muzzle)
+	UPROPERTY(EditAnywhere, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleFirearm", EditConditionHides, DisplayThumbnail = "false"), Replicated, ReplicatedUsing = OnRep_Muzzle)
 	TObjectPtr<UGunMuzzleData> Muzzle;
-	UPROPERTY(EditDefaultsOnly, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleGun", EditConditionHides, DisplayThumbnail = "false"), Replicated, ReplicatedUsing = OnRep_Barrel)
+	UPROPERTY(EditAnywhere, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleFirearm", EditConditionHides, DisplayThumbnail = "false"), Replicated, ReplicatedUsing = OnRep_Barrel)
 	TObjectPtr<UGunBarrelData> Barrel;
-	UPROPERTY(EditDefaultsOnly, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleGun", EditConditionHides, DisplayThumbnail = "false"), Replicated, ReplicatedUsing = OnRep_Grip)
+	UPROPERTY(EditAnywhere, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleFirearm", EditConditionHides, DisplayThumbnail = "false"), Replicated, ReplicatedUsing = OnRep_Grip)
 	TObjectPtr<UGunGripData> Grip;
-	UPROPERTY(EditDefaultsOnly, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleGun", EditConditionHides, DisplayThumbnail = "false"), Replicated, ReplicatedUsing = OnRep_Magazine)
+	UPROPERTY(EditAnywhere, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleFirearm", EditConditionHides, DisplayThumbnail = "false"), Replicated, ReplicatedUsing = OnRep_Magazine)
 	TObjectPtr<UGunMagazineData> Magazine;
-	UPROPERTY(EditDefaultsOnly, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleGun", EditConditionHides, DisplayThumbnail = "false"), Replicated, ReplicatedUsing = OnRep_Sight)
+	UPROPERTY(EditAnywhere, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleFirearm", EditConditionHides, DisplayThumbnail = "false"), Replicated, ReplicatedUsing = OnRep_Sight)
 	TObjectPtr<UGunSightData> Sight;
-	UPROPERTY(EditDefaultsOnly, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleGun", EditConditionHides, DisplayThumbnail = "false"), Replicated, ReplicatedUsing = OnRep_Stock)
+	UPROPERTY(EditAnywhere, Category = "Firearm|Parts", meta = (EditCondition = "!bUseSimpleFirearm", EditConditionHides, DisplayThumbnail = "false"), Replicated, ReplicatedUsing = OnRep_Stock)
 	TObjectPtr<UGunStockData> Stock;
 
 	UFUNCTION()
@@ -434,27 +469,9 @@ private:
 	void OnRep_Sight();
 	UFUNCTION()
 	void OnRep_Stock();
-	// Quick way to grab part data assets when looping.
-	UGunPartDataBase* GetPartData(const EFirearmComponentType& componentType) const {
-		switch (componentType) {
-		case 1: return Barrel;
-		case 2: return Grip;
-		case 3: return Magazine;
-		case 4: return Sight;
-		case 5: return Stock;
-		case 6: return Muzzle;
-		default: return nullptr;
-		}
-	}
-	// Quick way to set part data assets when looping.
-	bool SetPartBaseData(UGunPartDataBase* part) {
-		if (part->IsA<UGunMuzzleData>())	{ Muzzle = Cast<UGunMuzzleData>(part);			return true; }
-		if (part->IsA<UGunBarrelData>())	{ Barrel = Cast<UGunBarrelData>(part);			return true; }
-		if (part->IsA<UGunGripData>())		{ Grip = Cast<UGunGripData>(part);				return true; }
-		if (part->IsA<UGunMagazineData>())	{ Magazine = Cast<UGunMagazineData>(part);		return true; }
-		if (part->IsA<UGunSightData>())		{ Sight = Cast<UGunSightData>(part);			return true; }
-		if (part->IsA<UGunStockData>())		{ Stock = Cast<UGunStockData>(part);			return true; }
-		return false;
-	}
+	// Quick way to set part data assets.
+	bool SetPartBaseData(UGunPartDataBase* part);
 #pragma endregion
 };
+
+

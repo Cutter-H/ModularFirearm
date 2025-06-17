@@ -27,10 +27,6 @@ public class ModularFirearm : ModuleRules
 			{
 				"Core",
 				"Niagara",
-                "GameplayAbilities",
-                "GameplayTags",
-                "GameplayTasks",
-				"GameplayAbilitiesEditor",
 				
 				// ... add other public dependencies that you statically link with here ...
 			}
