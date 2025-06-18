@@ -19,8 +19,8 @@ void UModularFirearmCustomizationComponent::SetMeshComponents(FFirearmMeshCompon
 		ReceiverMesh = components.Receiver;
 	}
 #define ASSIGNPART(x)\
-	if (components.##x && !FirearmComponents.Contains(EFirearmComponentType::MFPT_##x)) {\
-		FirearmComponents.Add(EFirearmComponentType::MFPT_##x, components.##x);\
+	if (components.x && !FirearmComponents.Contains(EFirearmComponentType::MFPT_##x)) {\
+		FirearmComponents.Add(EFirearmComponentType::MFPT_##x, components.x);\
 	}
 	ASSIGNPART(Grip);
 	ASSIGNPART(Sight);

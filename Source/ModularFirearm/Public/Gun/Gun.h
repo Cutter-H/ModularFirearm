@@ -40,7 +40,7 @@ struct FModularFirearmFiringData{
 	TArray<TEnumAsByte<EFiringMode>> AvailableFiringModes;
 	/**
 	* Increases the number of additional bullets used when firing the weapon. (Useful for shotguns)
-	* Decimal digits determine chance for additiona bullet. Example: 0.1 -> 10% change to fire 1 additional bullet.
+	* Decimal digits determine chance for additional bullet. Example: 0.1 -> 10% change to fire 1 additional bullet.
 	*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	float Multishot = 0.f;

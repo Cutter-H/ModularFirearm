@@ -471,16 +471,7 @@ void AModularFirearm::BeginPlay() {
 	if (IsValid(ReceiverMesh)) {
 		if (UAnimInstance* animInst = ReceiverMesh->GetAnimInstance()) {
 			animInst->OnMontageEnded.AddDynamic(this, &AModularFirearm::OnReceiverMontageEnded);
-		}/*
-		if (HasAuthority()) {
-			SetModularPart(MFPT_Barrel, Barrel);
-			SetModularPart(MFPT_Grip, Grip);
-			SetModularPart(MFPT_Magazine, Magazine);
-			SetModularPart(MFPT_Muzzle, Muzzle);
-			SetModularPart(MFPT_Sight, Sight);
-			SetModularPart(MFPT_Stock, Stock);
-		}/**/
-		
+		}		
 	}
 	if (HasAuthority() && bStartWithWeaponLoaded) {
 		bBulletChambered = true;
