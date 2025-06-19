@@ -9,6 +9,9 @@
 #include "Gun.generated.h"
 
 class UModularFirearmCustomizationComponent;
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGenericFirearmEventSignature);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnPartChangedSignature, EFirearmComponentType, type, UGunPartDataBase*, newPart);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnPartSkinChangedSignature, EFirearmComponentType, type, FString, newSkin);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAmmoChangeSignature, int, newAmmo);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBulletSpawnSignature, AActor*, newBullet);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPlayAnimationSignature, UAnimMontage*, montage);
@@ -104,6 +107,34 @@ public:
 	UGunPartDataBase* GetPartData(EFirearmComponentType type);
 #pragma region Delegates
 	/*
+	* Called when the weapon starts firing.
+	*/UPROPERTY(BlueprintAssignable, Category = "Firearm")
+	FOnGenericFirearmEventSignature OnBeginFiring;
+	/*
+	* Called when the weapon stops firing.
+	*/UPROPERTY(BlueprintAssignable, Category = "Firearm")
+	FOnGenericFirearmEventSignature OnEndFiring;
+	/*
+	* Called when the weapon starts reloading.
+	*/UPROPERTY(BlueprintAssignable, Category = "Firearm")
+	FOnGenericFirearmEventSignature OnBeginReloading;
+	/*
+	* Called when the weapon stops reloading.
+	*/UPROPERTY(BlueprintAssignable, Category = "Firearm")
+	FOnGenericFirearmEventSignature OnEndReloading;
+	/*
+	* Called on every firing event. First time after OnBeginFiring. 
+	*/UPROPERTY(BlueprintAssignable, Category = "Firearm")
+	FOnGenericFirearmEventSignature OnFire;
+	/*
+	* Called when a part's skin is changed.
+	*/UPROPERTY(BlueprintAssignable, Category = "Firearm")
+	FOnPartSkinChangedSignature OnSkinChanged;
+	/*
+	* Called when a part is changed.
+	*/UPROPERTY(BlueprintAssignable, Category = "Firearm")
+	FOnPartChangedSignature OnPartChanged;
+	/*
 	* Called when Current Magazine Ammo or Chambered Bullet are altered.
 	*/UPROPERTY(BlueprintAssignable, Category = "Firearm")
 	FOnAmmoChangeSignature OnCurrentAmmoChange;
@@ -112,21 +143,6 @@ public:
 	* This is called for EVERY bullet of Multishot, so this may be called multiple times when firing.
 	*/UPROPERTY(BlueprintAssignable, Category = "Firearm")
 	FOnBulletSpawnSignature OnBulletSpawn;
-	/*
-	* Called on all instances when the firing montage should play.
-	* If PlayMontagesFromExternalSource is enabled. This is called, but no montage is played.
-	*/UPROPERTY(BlueprintAssignable, Category = "Firearm")
-	FOnPlayAnimationSignature OnFiringMontagePlay;
-	/*
-	* Called on all instances when the reload montage should play.
-	* If PlayMontagesFromExternalSource is enabled. This is called, but no montage is played.
-	*/UPROPERTY(BlueprintAssignable, Category = "Firearm")
-	FOnPlayAnimationSignature OnReloadMontagePlay;
-	/*
-	* Called on all instances when the Reload montage stops.
-	* This is independent from PlayMontagesFromExternalSource. This is called whenever the montage is played that matches ReloadMontage.
-	*/UPROPERTY(BlueprintAssignable, Category = "Firearm")
-	FOnPlayAnimationSignature OnReloadMontageStop;
 #pragma endregion
 #pragma region Interface Overrides
 
@@ -138,7 +154,7 @@ public:
 	virtual void SetModularPartSkin(EFirearmComponentType componentType, const FString& skinName) override;
 	UFUNCTION(Server, Reliable)
 	virtual void SetAllSkins(const FString& skinName) override;
-	UFUNCTION(Server, Reliable)
+	UFUNCTION()
 	virtual void StartFiring() override;
 	UFUNCTION()
 	virtual void StopFiring() override;
@@ -215,6 +231,14 @@ public:
 protected:
 #pragma region Firearm Variables
 	/*
+	* Set to true when Start Firing is called. Set to false when stop firing is called.
+	*/UPROPERTY(ReplicatedUsing=OnRep_IsFiring)
+	bool bIsFiring = false;
+	/*
+	* Set to true when Reload is called. Set to false when the reload is stopped using the OnReceiverMontageEnded function.
+	*/UPROPERTY(ReplicatedUsing=OnRep_IsReloading)
+	bool bIsReloading = false;
+	/*
 	* If true, the weapon will set current ammo to max ammo at Beginplay. Afterwards this is set to false.
 	*/UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm", meta = (ExposeOnSpawn = "true"))
 	bool bStartWithWeaponLoaded = true;
@@ -224,10 +248,6 @@ protected:
 	*/
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm", meta = (ExposeOnSpawn = "true"))
 	bool bUsesChamberedRounds = true;
-	/*
-	* If true, the weapon won't fire any play montage's on the receiver, but will still call the montage Dispatchers.
-	*/UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Firearm")
-	bool bPlayMontagesFromExternalSource = false;
 	/*
 	*  If true, you cannot modify this weapon with parts. Only with the receiver mesh and this actor.
 	*/UPROPERTY(EditAnywhere, Category = "Firearm|Parts")
@@ -256,7 +276,7 @@ protected:
 	* Utilized when using DirectionOfMuzzle for TargetingMode. This rotation is combined with the rotation of the muzzle.
 	*/
 	UPROPERTY(EditAnywhere, Category = "Firearm|Firing", meta = (EditConditionHides, EditCondition = "TargetingMode==ETargetingMode::DirectionOfMuzzle"))
-	FRotator MuzzleOffset;
+	FRotator MuzzleOffset = FRotator(0, 90, 0);
 	/*
 	* How many bullets have been fired in the current volley. 
 	* This is iterated after the bullet is fired.
@@ -354,7 +374,10 @@ protected:
 	/*
 	* Used to replicate montages on the receiver mesh.
 	*/UFUNCTION(NetMulticast, Reliable)
-	void PlayReplicatedMontage(UAnimMontage* montage, const FString& info = "");
+	void PlayReplicatedMontage(UAnimMontage* montage);
+
+	UFUNCTION(NetMulticast, Reliable)
+	void StopReplicatedMontage(UAnimMontage* montage);	
 	/*
 	* Bound to the receiver mesh's anim instance. Called when ANY montage ends.
 	*/UFUNCTION()
@@ -390,21 +413,9 @@ private:
 	*/UPROPERTY()
 	bool bWantsToFire = false;
 	/*
-	* Set to true when Reload is called. Set to false when the reload is stopped using the OnReceiverMontageEnded function.
-	*/UPROPERTY()
-	bool bReloading = false;
-	/*
-	* Sends the reload request to the server for replication.
-	*/UFUNCTION(Server, Reliable)
-	void ReloadOnServer(bool start = true);
-	/*
 	* Spawns the bullet on the server for replication.
 	*/UFUNCTION(Server, Reliable)
 	void SpawnBullet(const FVector& targetDirection);
-	/*
-	* Reduces the CurrentAmmo
-	*/UFUNCTION(Server, Reliable)
-	void ReduceCurrentAmmo();
 	/*
 	* Called when bBulletChambered or CurrentMagazineAmmo are changed.
 	*/UFUNCTION()
@@ -469,9 +480,17 @@ private:
 	void OnRep_Sight();
 	UFUNCTION()
 	void OnRep_Stock();
+	UFUNCTION()
+	void OnRep_IsFiring();
+	UFUNCTION()
+	void OnRep_IsReloading();
+#pragma endregion
+
 	// Quick way to set part data assets.
 	bool SetPartBaseData(UGunPartDataBase* part);
-#pragma endregion
 };
+
+
+
 
 

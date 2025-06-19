@@ -14,7 +14,7 @@
 #pragma region Firing
 struct FStreamableManager;
 
-void AModularFirearm::StartFiring_Implementation() {
+void AModularFirearm::StartFiring() {
 	bWantsToFire = true;
 	if (GetWorld()->GetTimerManager().IsTimerActive(RecoilTimer)) {
 		return;
@@ -74,18 +74,13 @@ void AModularFirearm::SpawnBullet_Implementation(const FVector& targetDirection)
 	if (!IsValid(bulletClass)) {
 		return;
 	}
-	FTransform spawnTransform = GetMuzzleTransform();
-	spawnTransform.SetRotation(FQuat::MakeFromRotator(targetDirection.Rotation()));
+	FTransform spawnTransform = FTransform(targetDirection.Rotation(),GetMuzzleTransform().GetLocation(), GetMuzzleTransform().GetScale3D());
 	FActorSpawnParameters spawnParams;
 	spawnParams.Owner = this; spawnParams.Instigator = GetInstigator(); spawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	AActor* bullet = GetWorld()->SpawnActor<AActor>(bulletClass, spawnTransform, spawnParams);
 	if (!IsValid(bullet)) {
 		return;
 	}
-	OnBulletSpawn.Broadcast(bullet);
-	PlayReplicatedMontage(FiringMontage, "Fire");
-}
-void AModularFirearm::ReduceCurrentAmmo_Implementation() {
 	if (CurrentMagazineAmmo == 0) {
 		if(bBulletChambered){
 			bBulletChambered = false;
@@ -94,13 +89,16 @@ void AModularFirearm::ReduceCurrentAmmo_Implementation() {
 	else {
 		CurrentMagazineAmmo = FMath::Clamp(CurrentMagazineAmmo-1, 0, GetMaxAmmo());
 	}
+	OnRep_CurrentAmmo();
+	OnBulletSpawn.Broadcast(bullet);
+	PlayReplicatedMontage(FiringMontage);
 }
+
 void AModularFirearm::OnRep_CurrentAmmo() {
 	OnCurrentAmmoChange.Broadcast(CurrentMagazineAmmo + bBulletChambered);
 }
 void AModularFirearm::FireWeapon(bool force) {
 	if (!force && !bWantsToFire) {
-
 		GetWorld()->GetTimerManager().PauseTimer(FiringTimer);
 		VolleyBulletCount = 0;
 		return;
@@ -147,6 +145,7 @@ void AModularFirearm::FireWeapon(bool force) {
 				}
 				break;
 			}
+			default:{}
 			}
 		}
 		FRandomStream stream;
@@ -159,10 +158,10 @@ void AModularFirearm::FireWeapon(bool force) {
 			FVector targetDirection = (targetLocation - GetMuzzleTransform().GetLocation()).GetSafeNormal();
 			
 			targetDirection = UKismetMathLibrary::RandomUnitVectorInConeInDegreesFromStream(stream, targetDirection, GetBulletSpread(VolleyBulletCount));
-			
-			SpawnBullet(targetLocation);
+			//UKismetSystemLibrary::DrawDebugSphere(this, targetLocation)
+			SpawnBullet(targetDirection);
+			UKismetSystemLibrary::PrintString(this, targetLocation.ToString());
 		}
-		ReduceCurrentAmmo();
 		VolleyBulletCount++;
 		/* Effects */ {
 			if (GetCamShake()) {
@@ -204,15 +203,9 @@ void AModularFirearm::BurstFireWeapon(int burst) {
 #pragma endregion
 #pragma region Reloading
 void AModularFirearm::Reload() {
-	if (GetReserveAmmo() <= 0 || GetCurrentAmmo() <= GetMaxAmmo() || bReloading) {
+	if (GetReserveAmmo() <= 0 || GetCurrentAmmo() >= GetMaxAmmo() || bIsReloading) {
 		return;
 	}
-	ReloadOnServer(true);
-}
-void AModularFirearm::StopReloading() {
-	ReloadOnServer(false);
-}
-void AModularFirearm::ReloadOnServer_Implementation(bool start) {
 	if (GetReloadMontage()) {
 		if (UAnimInstance* animInst = ReceiverMesh->GetAnimInstance()) {
 			bool reloadActive = animInst->Montage_IsPlaying(GetReloadMontage());
@@ -220,9 +213,19 @@ void AModularFirearm::ReloadOnServer_Implementation(bool start) {
 				return;
 			}
 		}
-		PlayReplicatedMontage(GetReloadMontage(), "Reload");
+		bIsReloading = true;
+		OnRep_IsReloading();
+		PlayReplicatedMontage(GetReloadMontage());
 	}
 }
+void AModularFirearm::StopReloading() {
+	if (bIsReloading) {
+		StopReplicatedMontage(GetReloadMontage());
+		bIsReloading = false;
+		OnRep_IsReloading();
+	}
+}
+
 void AModularFirearm::LoadNewMagazine(bool bFreeFill) {
 	if (!HasAuthority() || GetReserveAmmo() <= 0) {
 		return;
@@ -245,6 +248,7 @@ void AModularFirearm::LoadNewMagazine(bool bFreeFill) {
 		bBulletChambered = true;
 		--CurrentMagazineAmmo;
 	}
+	OnRep_CurrentAmmo();
 }
 
 FModularFirearmAmmo AModularFirearm::GetAmmo() const {
@@ -347,37 +351,36 @@ int AModularFirearm::GetReserveAmmo_Implementation() const {
 }
 #pragma endregion
 #pragma region Cosmetics
-void AModularFirearm::PlayReplicatedMontage_Implementation(UAnimMontage* montage, const FString& info) {
+void AModularFirearm::PlayReplicatedMontage_Implementation(UAnimMontage* montage) {
 	if (!IsValid(ReceiverMesh)) {
 		return;
 	}
-	if (!IsValid(montage)) {
-		if (UAnimInstance* animInst = ReceiverMesh->GetAnimInstance()) {
-			bool reloadActive = animInst->Montage_IsPlaying(GetReloadMontage());
-			animInst->StopAllMontages(1.f);
-			if(reloadActive){
-				OnReloadMontageStop.Broadcast(DefaultReloadMontage);
-			}
-		}
-	}
+
 	float montageSpeedModifier = 1.f;
-	if (info == "Fire") {
-		OnFiringMontagePlay.Broadcast(montage);
-	}
-	if (info == "Reload") {
-		OnReloadMontagePlay.Broadcast(montage);
+	if (GetReloadMontage() == montage) {
 		montageSpeedModifier = GetReloadSpeedModifier();
 	}
-	if (bPlayMontagesFromExternalSource) {
-		return;
-	}
+	
 	if (UAnimInstance* animInst = ReceiverMesh->GetAnimInstance()) {
 		animInst->Montage_Play(montage, montageSpeedModifier);
 	}
 }
+
+void AModularFirearm::StopReplicatedMontage_Implementation(UAnimMontage* montage) {
+	if (montage) {
+		if (UAnimInstance* animInst = ReceiverMesh->GetAnimInstance()) {
+			bool reloadActive = animInst->Montage_IsPlaying(GetReloadMontage());
+			animInst->Montage_Stop(.1f, montage);
+		}
+	}
+}
+
 void AModularFirearm::OnReceiverMontageEnded(UAnimMontage* Montage, bool bInterrupted) {
 	if (Montage == DefaultReloadMontage) {
-		bReloading = false;
+		bIsReloading = false;
+		if (HasAuthority()) {
+			OnRep_IsReloading();
+		}
 		if (!bInterrupted) {
 			LoadNewMagazine();
 		}
@@ -468,6 +471,8 @@ void AModularFirearm::OnConstruction(const FTransform& Transform) {
 }
 void AModularFirearm::BeginPlay() {
 	Super::BeginPlay();
+	TargetingMode = TargetingData.DefaultTargetingMode;
+	FiringMode = FiringData.DefaultFiringMode;
 	if (IsValid(ReceiverMesh)) {
 		if (UAnimInstance* animInst = ReceiverMesh->GetAnimInstance()) {
 			animInst->OnMontageEnded.AddDynamic(this, &AModularFirearm::OnReceiverMontageEnded);
@@ -476,6 +481,7 @@ void AModularFirearm::BeginPlay() {
 	if (HasAuthority() && bStartWithWeaponLoaded) {
 		bBulletChambered = true;
 		CurrentMagazineAmmo = GetMaxAmmo() - 1;
+		OnRep_CurrentAmmo();
 	}
 }
 
@@ -512,12 +518,16 @@ void AModularFirearm::GetLifetimeReplicatedProps(TArray< FLifetimeProperty >& Ou
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AModularFirearm, bBulletChambered);
 	DOREPLIFETIME(AModularFirearm, CurrentMagazineAmmo);
+	
 	DOREPLIFETIME_CONDITION_NOTIFY(AModularFirearm, Muzzle, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(AModularFirearm, Barrel, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(AModularFirearm, Grip, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(AModularFirearm, Magazine, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(AModularFirearm, Sight, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(AModularFirearm, Stock, COND_None, REPNOTIFY_Always);
+
+	DOREPLIFETIME_CONDITION_NOTIFY(AModularFirearm, bIsFiring, COND_None, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(AModularFirearm, bIsReloading, COND_None, REPNOTIFY_Always);
 }
 #pragma endregion
 #pragma region Customization
@@ -539,26 +549,51 @@ void AModularFirearm::SetModularPartSkin_Implementation(EFirearmComponentType co
 }
 void AModularFirearm::ReplicateSkinChange_Implementation(const EFirearmComponentType& componentType, const FString& skinName) {
 	CustomizationComponent->ChangeSkin(componentType, skinName);
+	OnSkinChanged.Broadcast(componentType, skinName);
 }
 #pragma endregion
 #pragma region Component OnRep functions
 void AModularFirearm::OnRep_Muzzle() {
 	CustomizationComponent->ChangePart(EFirearmComponentType::MFPT_Muzzle, Muzzle);
+	OnPartChanged.Broadcast(EFirearmComponentType::MFPT_Muzzle, Muzzle);
 }
 void AModularFirearm::OnRep_Barrel() {
 	CustomizationComponent->ChangePart(EFirearmComponentType::MFPT_Barrel, Barrel);
+	OnPartChanged.Broadcast(EFirearmComponentType::MFPT_Barrel, Barrel);
 }
 void AModularFirearm::OnRep_Grip() {
 	CustomizationComponent->ChangePart(EFirearmComponentType::MFPT_Grip, Grip);
+	OnPartChanged.Broadcast(EFirearmComponentType::MFPT_Grip, Grip);
 }
 void AModularFirearm::OnRep_Magazine() {
 	CustomizationComponent->ChangePart(EFirearmComponentType::MFPT_Magazine, Magazine);
+	OnPartChanged.Broadcast(EFirearmComponentType::MFPT_Magazine, Magazine);
 }
 void AModularFirearm::OnRep_Sight() {
 	CustomizationComponent->ChangePart(EFirearmComponentType::MFPT_Barrel, Sight);
+	OnPartChanged.Broadcast(EFirearmComponentType::MFPT_Barrel, Sight);
 }
 void AModularFirearm::OnRep_Stock() {
 	CustomizationComponent->ChangePart(EFirearmComponentType::MFPT_Stock, Stock);
+	OnPartChanged.Broadcast(EFirearmComponentType::MFPT_Stock, Stock);
+}
+
+void AModularFirearm::OnRep_IsFiring() {
+	if (bIsFiring) {
+		OnBeginFiring.Broadcast();
+	}
+	else {
+		OnEndFiring.Broadcast();
+	}
+}
+
+void AModularFirearm::OnRep_IsReloading() {
+	if (bIsReloading) {
+		OnBeginReloading.Broadcast();
+	}
+	else {
+		OnEndReloading.Broadcast();
+	}
 }
 
 bool AModularFirearm::SetPartBaseData(UGunPartDataBase* part) {
