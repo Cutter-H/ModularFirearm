@@ -2,10 +2,10 @@
 
 
 #include "Gun/ModularFirearmCustomizationComponent.h"
-#include "ModularFirearmDataAssets.h"
-#include "ModularFirearm.h"
+#include "Gun/ModularFirearmDataAssets.h"
+#include "ModularFirearmPlugin.h"
 #include "Engine/AssetManager.h"
-#include "Gun/Gun.h"
+#include "Gun/ModularFirearm.h"
 #include "Net/UnrealNetwork.h"
 
 

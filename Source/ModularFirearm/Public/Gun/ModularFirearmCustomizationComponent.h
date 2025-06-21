@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Gun/ModularFirearmTypes.h"
+#include "ModularFirearmTypes.h"
 #include "Components/ActorComponent.h"
 #include "ModularFirearmCustomizationComponent.generated.h"
 
